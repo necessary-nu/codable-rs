@@ -1,0 +1,10 @@
+[package]
+name = "codable-json"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+codable = { path = "../codable" }
+indexmap = "1.9.1"
+slotmap = "1.0.6"
+thiserror = "1.0.34"
