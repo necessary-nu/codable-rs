@@ -6,10 +6,10 @@ use indexmap::IndexMap;
 
 use codable::{
     enc::{self, Encode, Encoder},
-    CodingKey, Cons,
+    CodingKey, Cons, ToCodingKey,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct JsonEncoder<'a> {
     coding_path: Cons<'a, CodingKey>,
 }
@@ -19,31 +19,9 @@ pub fn to_value<T: Encode>(input: &T) -> Result<Value, Error> {
     input.encode(encoder)
 }
 
-// impl JsonEncoder {
-//     #[inline]
-//     pub(crate) fn new() -> Self {
-//         Self {
-//             coding_path: Cons::root(CodingKey::Root),
-//             value: Default::default(),
-//         }
-//     }
-
-//     #[inline]
-//     fn as_ref<'a>(&self) -> &JsonEncoderRef<'a> {
-//         unsafe { std::mem::transmute(self) }
-//     }
-
-//     #[inline]
-//     fn as_ref_mut<'a>(&mut self) -> &mut JsonEncoderRef<'a> {
-//         unsafe { std::mem::transmute(self) }
-//     }
-// }
-
 impl<'a> JsonEncoder<'a> {
     pub(crate) fn new(coding_path: Cons<'a, CodingKey>) -> Self {
-        Self {
-            coding_path,
-        }
+        Self { coding_path }
     }
 }
 
@@ -70,16 +48,13 @@ pub enum Error {
 }
 
 struct KeyedContainer<'a> {
-    encoder: JsonEncoder<'a>,
     coding_path: Cons<'a, CodingKey>,
     value: IndexMap<String, Value>,
-    // _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> KeyedContainer<'a> {
-    fn new(encoder: JsonEncoder<'a>, coding_path: Cons<'a, CodingKey>) -> KeyedContainer<'a> {
+    fn new(coding_path: Cons<'a, CodingKey>) -> KeyedContainer<'a> {
         KeyedContainer {
-            encoder,
             coding_path,
             value: Default::default(),
         }
@@ -95,7 +70,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         &self.coding_path
     }
 
-    fn encode_u8(&mut self, value: u8, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_u8(&mut self, value: u8, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -103,7 +78,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_u16(&mut self, value: u16, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_u16(&mut self, value: u16, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -111,7 +86,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_u32(&mut self, value: u32, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_u32(&mut self, value: u32, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -119,7 +94,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_u64(&mut self, value: u64, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_u64(&mut self, value: u64, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -127,7 +102,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_u128(&mut self, value: u128, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_u128(&mut self, value: u128, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -135,7 +110,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_usize(&mut self, value: usize, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_usize(&mut self, value: usize, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -143,7 +118,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_i8(&mut self, value: i8, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_i8(&mut self, value: i8, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -151,7 +126,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_i16(&mut self, value: i16, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_i16(&mut self, value: i16, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -159,7 +134,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_i32(&mut self, value: i32, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_i32(&mut self, value: i32, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -167,7 +142,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_i64(&mut self, value: i64, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_i64(&mut self, value: i64, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -175,7 +150,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_i128(&mut self, value: i128, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_i128(&mut self, value: i128, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -183,7 +158,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_isize(&mut self, value: isize, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_isize(&mut self, value: isize, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value.insert(
             key.as_str()?.to_string(),
             Value::Number(value.to_string().into()),
@@ -194,7 +169,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
     fn encode_str<'x, S: Into<Cow<'x, str>>>(
         &mut self,
         value: S,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<(), Self::Error> {
         let s = match value.into() {
             Cow::Borrowed(x) => x.to_string(),
@@ -205,19 +180,19 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn encode_f32(&mut self, value: f32, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_f32(&mut self, value: f32, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value
             .insert(key.as_str()?.to_string(), Value::Number(value.to_string()));
         Ok(())
     }
 
-    fn encode_f64(&mut self, value: f64, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_f64(&mut self, value: f64, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value
             .insert(key.as_str()?.to_string(), Value::Number(value.to_string()));
         Ok(())
     }
 
-    fn encode_bool(&mut self, value: bool, key: &CodingKey) -> Result<(), Self::Error> {
+    fn encode_bool(&mut self, value: bool, key: &impl ToCodingKey) -> Result<(), Self::Error> {
         self.value
             .insert(key.as_str()?.to_string(), Value::Bool(value));
         Ok(())
@@ -226,7 +201,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
     fn encode_option<T: Encode>(
         &mut self,
         value: Option<T>,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<(), Self::Error> {
         match value {
             Some(x) => self.encode(&x, key),
@@ -237,8 +212,12 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn encode<'a, T: Encode>(&'a mut self, value: &T, key: &CodingKey) -> Result<(), Self::Error> {
-        let coding_path = self.coding_path.join(key.clone());
+    fn encode<'a, T: Encode>(
+        &'a mut self,
+        value: &T,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
+        let coding_path = self.coding_path.join(key.to_coding_key());
         let key = key.as_str()?.to_string();
         let encoder = JsonEncoder::<'a>::new(coding_path);
         let value = value.encode(encoder)?;
@@ -246,7 +225,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         Ok(())
     }
 
-    fn opt_encode_u8(&mut self, value: Option<u8>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_u8(
+        &mut self,
+        value: Option<u8>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_u8(value, key)
         } else {
@@ -254,7 +237,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_u16(&mut self, value: Option<u16>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_u16(
+        &mut self,
+        value: Option<u16>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_u16(value, key)
         } else {
@@ -262,7 +249,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_u32(&mut self, value: Option<u32>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_u32(
+        &mut self,
+        value: Option<u32>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_u32(value, key)
         } else {
@@ -270,7 +261,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_u64(&mut self, value: Option<u64>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_u64(
+        &mut self,
+        value: Option<u64>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_u64(value, key)
         } else {
@@ -278,7 +273,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_u128(&mut self, value: Option<u128>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_u128(
+        &mut self,
+        value: Option<u128>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_u128(value, key)
         } else {
@@ -289,7 +288,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
     fn opt_encode_usize(
         &mut self,
         value: Option<usize>,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_usize(value, key)
@@ -298,7 +297,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_i8(&mut self, value: Option<i8>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_i8(
+        &mut self,
+        value: Option<i8>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_i8(value, key)
         } else {
@@ -306,7 +309,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_i16(&mut self, value: Option<i16>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_i16(
+        &mut self,
+        value: Option<i16>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_i16(value, key)
         } else {
@@ -314,7 +321,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_i32(&mut self, value: Option<i32>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_i32(
+        &mut self,
+        value: Option<i32>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_i32(value, key)
         } else {
@@ -322,7 +333,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_i64(&mut self, value: Option<i64>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_i64(
+        &mut self,
+        value: Option<i64>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_i64(value, key)
         } else {
@@ -330,7 +345,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_i128(&mut self, value: Option<i128>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_i128(
+        &mut self,
+        value: Option<i128>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_i128(value, key)
         } else {
@@ -341,7 +360,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
     fn opt_encode_isize(
         &mut self,
         value: Option<isize>,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_isize(value, key)
@@ -350,7 +369,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_str(&mut self, value: Option<&str>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_str(
+        &mut self,
+        value: Option<&str>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_str(value, key)
         } else {
@@ -358,7 +381,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_f32(&mut self, value: Option<f32>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_f32(
+        &mut self,
+        value: Option<f32>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_f32(value, key)
         } else {
@@ -366,7 +393,11 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         }
     }
 
-    fn opt_encode_f64(&mut self, value: Option<f64>, key: &CodingKey) -> Result<(), Self::Error> {
+    fn opt_encode_f64(
+        &mut self,
+        value: Option<f64>,
+        key: &impl ToCodingKey,
+    ) -> Result<(), Self::Error> {
         if let Some(value) = value {
             self.encode_f64(value, key)
         } else {
@@ -376,18 +407,20 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
 
     fn nested_container<'a>(
         &'a mut self,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
-        let p = self.coding_path().join(key.clone());
+        let p = self.coding_path().join(key.to_coding_key());
         let encoder = JsonEncoder::new(p);
         Ok(encoder.into_container())
     }
 
     fn nested_seq_container<'a>(
         &'a mut self,
-        key: &CodingKey,
+        key: &impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
-        todo!()
+        let p = self.coding_path().join(key.to_coding_key());
+        let encoder = JsonEncoder::new(p);
+        Ok(encoder.into_seq_container())
     }
 
     fn finish(self) -> Self::Value {
@@ -397,15 +430,13 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
 
 #[derive(Debug)]
 struct ValueContainer<'en> {
-    encoder: JsonEncoder<'en>,
     coding_path: Cons<'en, CodingKey>,
     value: Option<Value>,
 }
 
 impl<'en> ValueContainer<'en> {
-    pub fn new(encoder: JsonEncoder<'en>, coding_path: Cons<'en, CodingKey>) -> Self {
+    pub fn new(coding_path: Cons<'en, CodingKey>) -> Self {
         Self {
-            encoder,
             coding_path,
             value: None,
         }
@@ -422,7 +453,6 @@ impl<'container> enc::ValueContainer for ValueContainer<'container> {
     }
 
     fn encode_u8(&mut self, value: u8) -> Result<(), Self::Error> {
-        println!("WOOT {:?}", &self.coding_path());
         self.value = Some(Value::Number(value.to_string()));
         Ok(())
     }
@@ -497,14 +527,6 @@ impl<'container> enc::ValueContainer for ValueContainer<'container> {
         Ok(())
     }
 
-    fn encode_option<T>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn encode<T>(&mut self, value: T) -> Result<(), Self::Error> {
-        todo!()
-    }
-
     fn encode_bool(&mut self, value: bool) -> Result<(), Self::Error> {
         self.value = Some(Value::Bool(value));
         Ok(())
@@ -513,11 +535,30 @@ impl<'container> enc::ValueContainer for ValueContainer<'container> {
     fn finish(self) -> Self::Value {
         self.value.unwrap_or(Value::Null)
     }
+
+    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let value = value.encode(JsonEncoder::new(self.coding_path.clone()))?;
+        self.value = Some(value);
+        Ok(())
+    }
 }
 
 struct SeqContainer<'a> {
     coding_path: Cons<'a, CodingKey>,
     values: Vec<Value>,
+}
+
+impl<'en> SeqContainer<'en> {
+    pub fn new(coding_path: Cons<'en, CodingKey>) -> Self {
+        Self {
+            coding_path,
+            values: vec![],
+        }
+    }
 }
 
 impl<'container> enc::SeqContainer for SeqContainer<'container> {
@@ -604,28 +645,20 @@ impl<'container> enc::SeqContainer for SeqContainer<'container> {
         Ok(())
     }
 
-    fn encode_option<T>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn encode<T>(&mut self, value: T) -> Result<(), Self::Error> {
-        todo!()
-    }
-
     fn encode_bool(&mut self, value: bool) -> Result<(), Self::Error> {
         self.values.push(Value::Bool(value));
         Ok(())
     }
 
     fn nested_container<'a>(
-            &'a mut self,
-        ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
+        &'a mut self,
+    ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
         todo!()
     }
 
     fn nested_seq_container<'a>(
-            &'a mut self,
-        ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
+        &'a mut self,
+    ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
         todo!()
     }
 
@@ -633,6 +666,15 @@ impl<'container> enc::SeqContainer for SeqContainer<'container> {
         Value::Array(self.values)
     }
 
+    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let value = value.encode(JsonEncoder::new(self.coding_path.clone()))?;
+        self.values.push(value);
+        Ok(())
+    }
 }
 
 impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
@@ -644,24 +686,23 @@ impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
     type SeqContainer = SeqContainer<'r> where Self: 'r;
 
     fn into_value_container(self) -> Self::ValueContainer {
-        let p = self.coding_path.clone();
-        ValueContainer::new(self, p)
+        ValueContainer::new(self.coding_path)
     }
 
     fn into_seq_container(self) -> Self::SeqContainer {
-        // SeqContainer::new(self.coding_path.clone());
-        todo!()
+        SeqContainer::new(self.coding_path)
     }
 
     fn into_container(self) -> Self::KeyedContainer {
-        let p = self.coding_path.clone();
-        KeyedContainer::new(self, p)
+        KeyedContainer::new(self.coding_path)
     }
 }
 
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
+
+    use codable::enc::KeyedContainer;
 
     use super::*;
 
@@ -672,10 +713,73 @@ mod test {
     }
 
     #[test]
+    fn basic_struct() {
+        struct Hmm {
+            test: u32,
+            a_bool: bool,
+            a_str: String,
+        }
+
+        impl Encode for Hmm {
+            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            where
+                E: Encoder<'e>,
+            {
+                let mut con = encoder.into_container();
+                con.encode(&self.test, &"test")?;
+                con.encode(&self.a_bool, &"a_bool")?;
+                con.encode(&self.a_str, &"a_str")?;
+                Ok(con.finish())
+            }
+        }
+
+        let hmm = Hmm {
+            test: 1238123,
+            a_bool: true,
+            a_str: "a test string".into(),
+        };
+
+        let value = to_value(&hmm).unwrap();
+        println!("{:?}", value);
+    }
+
+    #[test]
     fn basic_obj() {
+        enum Hmm {
+            String(&'static str),
+            Dict(HashMap<&'static str, Hmm>),
+            Arr(Vec<Hmm>),
+            Number(u32),
+        }
+        impl Encode for Hmm {
+            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            where
+                E: Encoder<'e>,
+            {
+                match self {
+                    Hmm::String(x) => x.encode(encoder),
+                    Hmm::Dict(x) => x.encode(encoder),
+                    Hmm::Arr(x) => x.encode(encoder),
+                    Hmm::Number(x) => x.encode(encoder),
+                }
+            }
+        }
         let mut input = HashMap::new();
-        input.insert("hello", "hi");
-        input.insert("interesting", "yes");
+        let mut map = HashMap::new();
+        map.insert("test", Hmm::String("another"));
+        input.insert("hello", Hmm::String("hi"));
+        input.insert("interesting", Hmm::String("yes"));
+        input.insert("lolwut", Hmm::Dict(map));
+        input.insert(
+            "hmm",
+            Hmm::Arr(vec![
+                Hmm::String("no"),
+                Hmm::Number(2),
+                Hmm::Number(3),
+                Hmm::Number(42),
+                Hmm::Number(9),
+            ]),
+        );
         let value = to_value(&input).unwrap();
         println!("{:?}", value);
     }
