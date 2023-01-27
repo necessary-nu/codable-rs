@@ -1,9 +1,9 @@
-use std::{borrow::Cow, marker::PhantomData};
+use std::{borrow::Cow, marker::PhantomData, str::FromStr};
 
 use indexmap::IndexMap;
 
 use codable::{
-    dec::{self, Decode, Decoder},
+    dec::{self, Decode, Decoder, KeyedContainer as _, SeqContainer as _, ValueContainer as _},
     enc::{self, Encode, Encoder},
     CodingKey, CodingPath, ToCodingKey,
 };
@@ -14,12 +14,18 @@ struct JsonEncoder<'a> {
 }
 
 pub fn to_value<T: Encode>(input: &T) -> Result<Value, Error> {
-    let encoder = JsonEncoder::new(CodingPath::root(CodingKey::Root));
+    let encoder = JsonEncoder::with_path(CodingPath::root(CodingKey::Root));
     input.encode(encoder)
 }
 
 impl<'a> JsonEncoder<'a> {
-    pub(crate) fn new(coding_path: CodingPath<'a, CodingKey>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            coding_path: CodingPath::root(CodingKey::Root),
+        }
+    }
+
+    pub(crate) fn with_path(coding_path: CodingPath<'a, CodingKey>) -> Self {
         Self { coding_path }
     }
 }
@@ -31,8 +37,8 @@ struct JsonDecoder<'a> {
 }
 
 pub fn from_value<T: Decode>(input: &Value) -> Result<T, Error> {
-    let decoder = JsonDecoder::new(CodingPath::root(CodingKey::Root), input);
-    T::decode(decoder)
+    let mut decoder = JsonDecoder::new(CodingPath::root(CodingKey::Root), input);
+    T::decode(&mut decoder)
 }
 
 impl<'a> JsonDecoder<'a> {
@@ -58,39 +64,79 @@ impl Default for Value {
 }
 
 impl Value {
-    fn as_map(&self) -> Result<&IndexMap<String, Value>, ()> {
-        // TODO: error describing what type it was instead
+    fn is_scalar(&self) -> bool {
+        match self {
+            Value::Array(_) |
+            Value::Object(_) => false,
+            _ => true
+        }
+    }
+    fn as_map(&self) -> Result<&IndexMap<String, Value>, Error> {
         match self {
             Value::Object(ref x) => Ok(x),
-            _ => Err(()),
+            _ => Err(Error::InvalidType),
         }
     }
 
-    fn as_array(&self) -> Result<&Vec<Value>, ()> {
+    fn as_array(&self) -> Result<&Vec<Value>, Error> {
         match self {
             Value::Array(ref x) => Ok(x),
-            _ => Err(()),
+            _ => Err(Error::InvalidType),
         }
     }
 
-    fn into_map(self) -> Result<IndexMap<String, Value>, ()> {
-        // TODO: error describing what type it was instead
+    fn into_map(self) -> Result<IndexMap<String, Value>, Error> {
         match self {
             Value::Object(x) => Ok(x),
-            _ => Err(()),
+            _ => Err(Error::InvalidType),
         }
     }
 
-    fn into_array(self) -> Result<Vec<Value>, ()> {
+    fn into_array(self) -> Result<Vec<Value>, Error> {
         match self {
             Value::Array(x) => Ok(x),
-            _ => Err(()),
+            _ => Err(Error::InvalidType),
         }
     }
 }
 
+impl Decode for Value {
+    fn decode<'d, D>(decoder: &mut D) -> dec::DecodeResult<'d, Self, D>
+    where
+        Self: Sized,
+        D: Decoder + 'd,
+    {
+        if let Ok(mut d) = decoder.as_seq_container() {
+            return Ok(Value::Array(d.decode()?));
+        }
+
+        if let Ok(_) = decoder.as_container() {
+            return Ok(Value::Object(Decode::decode(decoder)?));
+        }
+
+        let mut d = decoder.as_value_container()?;
+
+        if let Ok(x) = d.decode_f64() {
+            return Ok(Value::Number(x.to_string()));
+        }
+
+        if let Ok(x) = d.decode_string() {
+            return Ok(Value::String(x));
+        }
+
+        if let Ok(x) = d.decode_bool() {
+            return Ok(Value::Bool(x));
+        }
+
+        Ok(Value::Null)
+    }
+}
+
 #[derive(Debug)]
-pub enum Error {}
+pub enum Error {
+    KeyNotFound,
+    InvalidType,
+}
 
 struct KeyedContainer<'a> {
     coding_path: CodingPath<'a, CodingKey>,
@@ -107,7 +153,7 @@ impl<'a> KeyedContainer<'a> {
 }
 
 struct KeyedDecodingContainer<'a> {
-    decoder: JsonDecoder<'a>,
+    coding_path: CodingPath<'a, CodingKey>,
     value: &'a IndexMap<String, Value>,
 }
 
@@ -119,11 +165,12 @@ struct ValueDecodingContainer<'a> {
 struct SeqDecodingContainer<'a> {
     coding_path: CodingPath<'a, CodingKey>,
     value: &'a Vec<Value>,
+    cursor_index: usize,
 }
 
 impl<'a> KeyedDecodingContainer<'a> {
-    fn new(decoder: JsonDecoder<'a>, value: &'a IndexMap<String, Value>) -> Self {
-        Self { decoder, value }
+    fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a IndexMap<String, Value>) -> Self {
+        Self { coding_path, value }
     }
 }
 
@@ -135,7 +182,29 @@ impl<'a> ValueDecodingContainer<'a> {
 
 impl<'a> SeqDecodingContainer<'a> {
     fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Vec<Value>) -> Self {
-        Self { coding_path, value }
+        Self { coding_path, value, cursor_index: 0 }
+    }
+}
+
+#[inline(always)]
+fn decode_int<T, E>(value: &IndexMap<String, Value>, key: &str) -> Result<T, E>
+where
+    T: FromStr,
+{
+    match value.get(&*key.as_str()) {
+        Some(Value::Number(x)) => {
+            let n = match x.parse() {
+                Ok(v) => v,
+                Err(_) => panic!(),
+            };
+            Ok(n)
+        }
+        Some(other) => {
+            todo!()
+        }
+        None => {
+            todo!()
+        }
     }
 }
 
@@ -143,10 +212,10 @@ impl<'c> dec::KeyedContainer for KeyedDecodingContainer<'c> {
     type Error = Error;
     type Value = Value;
 
-    type Decoder<'a> = JsonDecoder<'a> where Self: 'a;
+    type Decoder = JsonDecoder<'c>;
 
     fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
-        &self.decoder.coding_path
+        &self.coding_path
     }
 
     fn contains(&self, coding_key: &impl ToCodingKey) -> bool {
@@ -154,89 +223,125 @@ impl<'c> dec::KeyedContainer for KeyedDecodingContainer<'c> {
         self.value.contains_key(&*k)
     }
 
+    type Keys<'a> = indexmap::map::Keys<'a, String, Value>
+    where Self: 'a;
+
+    fn keys<'a>(&'a self) -> Self::Keys<'a> {
+        self.value.keys()
+    }
+
     fn decode_u8(&mut self, key: &impl ToCodingKey) -> Result<u8, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_u16(&mut self, key: &impl ToCodingKey) -> Result<u16, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_u32(&mut self, key: &impl ToCodingKey) -> Result<u32, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_u64(&mut self, key: &impl ToCodingKey) -> Result<u64, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_u128(&mut self, key: &impl ToCodingKey) -> Result<u128, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_usize(&mut self, key: &impl ToCodingKey) -> Result<usize, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_i8(&mut self, key: &impl ToCodingKey) -> Result<i8, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_i16(&mut self, key: &impl ToCodingKey) -> Result<i16, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_i32(&mut self, key: &impl ToCodingKey) -> Result<i32, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_i64(&mut self, key: &impl ToCodingKey) -> Result<i64, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_i128(&mut self, key: &impl ToCodingKey) -> Result<i128, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_isize(&mut self, key: &impl ToCodingKey) -> Result<isize, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_string(&mut self, key: &impl ToCodingKey) -> Result<String, Self::Error> {
-        todo!()
+        println!("EHH? {} {:?}", key.as_str(), self.value);
+        match self.value.get(&*key.as_str()) {
+            Some(Value::String(x)) => Ok(x.to_string()),
+            Some(other) => {
+                todo!()
+            }
+            None => {
+                todo!()
+            }
+        }
     }
 
     fn decode_f32(&mut self, key: &impl ToCodingKey) -> Result<f32, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_f64(&mut self, key: &impl ToCodingKey) -> Result<f64, Self::Error> {
-        todo!()
+        decode_int(self.value, &key.as_str())
     }
 
     fn decode_bool(&mut self, key: &impl ToCodingKey) -> Result<bool, Self::Error> {
-        todo!()
+        match self.value.get(&*key.as_str()) {
+            Some(Value::Bool(x)) => Ok(*x),
+            Some(other) => {
+                todo!()
+            }
+            None => {
+                todo!()
+            }
+        }
     }
 
-    fn decode_option<T: Decode>(&mut self, key: &impl ToCodingKey) -> Result<T, Self::Error> {
-        todo!()
+    fn decode_option<T: Decode>(
+        &mut self,
+        key: &impl ToCodingKey,
+    ) -> Result<Option<T>, Self::Error> {
+        match self.decode(key) {
+            Ok(x) => Ok(Some(x)),
+            Err(Error::KeyNotFound) => Ok(None),
+            Err(x) => Err(x),
+        }
     }
 
     fn decode<T: Decode>(&mut self, key: &impl ToCodingKey) -> Result<T, Self::Error> {
-        todo!()
+        println!("{:?} -> {:?}", key.as_str(), &self.value);
+        let obj = self
+            .value
+            .get(&*key.as_str())
+            .ok_or_else(|| Error::KeyNotFound)?;
+        T::decode(&mut JsonDecoder::new(self.coding_path().clone(), obj))
     }
 
     fn nested_container<'a>(
         &'a mut self,
         key: &impl ToCodingKey,
-    ) -> Result<<Self::Decoder<'a> as dec::Decoder>::KeyedContainer, Self::Error> {
+    ) -> Result<<Self::Decoder as dec::Decoder>::KeyedContainer, Self::Error> {
         todo!()
     }
 
     fn nested_seq_container<'a>(
         &'a mut self,
         key: &impl ToCodingKey,
-    ) -> Result<<Self::Decoder<'a> as dec::Decoder>::SeqContainer, Self::Error> {
+    ) -> Result<<Self::Decoder as dec::Decoder>::SeqContainer, Self::Error> {
         todo!()
     }
 }
@@ -245,81 +350,134 @@ impl<'c> dec::ValueContainer for ValueDecodingContainer<'c> {
     type Error = Error;
     type Value = Value;
 
-    type Decoder<'a> = JsonDecoder<'a>;
+    type Decoder = JsonDecoder<'c>;
 
     fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
         &self.coding_path
     }
 
     fn decode_u8(&mut self) -> Result<u8, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_u16(&mut self) -> Result<u16, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_u32(&mut self) -> Result<u32, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_u64(&mut self) -> Result<u64, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_u128(&mut self) -> Result<u128, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_usize(&mut self) -> Result<usize, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_i8(&mut self) -> Result<i8, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_i16(&mut self) -> Result<i16, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_i32(&mut self) -> Result<i32, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_i64(&mut self) -> Result<i64, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_i128(&mut self) -> Result<i128, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_isize(&mut self) -> Result<isize, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_string(&mut self) -> Result<String, Self::Error> {
-        todo!()
+        match self.value {
+            Value::String(x) => Ok(x.to_string()),
+            _ => Err(Error::InvalidType),
+        }
     }
 
     fn decode_f32(&mut self) -> Result<f32, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => panic!(),
+        }
     }
 
     fn decode_f64(&mut self) -> Result<f64, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Number(x) => Ok(x.parse().unwrap()),
+            _ => Err(Error::InvalidType),
+        }
     }
 
     fn decode_bool(&mut self) -> Result<bool, Self::Error> {
-        todo!()
+        match self.value {
+            Value::Bool(x) => Ok(*x),
+            _ => panic!(),
+        }
     }
 
-    fn decode_option<T: Decode>(&mut self) -> Result<T, Self::Error> {
+    fn decode_option<T: Decode>(&mut self) -> Result<Option<T>, Self::Error> {
         todo!()
     }
 
     fn decode<T: Decode>(&mut self) -> Result<T, Self::Error> {
+        println!("value itself -> {:?}", &self.value);
+        T::decode(&mut JsonDecoder::new(self.coding_path().clone(), self.value))
+    }
+
+    fn decode_null(&mut self) -> Result<(), Self::Error> {
         todo!()
     }
 }
@@ -328,93 +486,189 @@ impl<'c> dec::SeqContainer for SeqDecodingContainer<'c> {
     type Error = Error;
     type Value = Value;
 
-    type Decoder<'a> = JsonDecoder<'a> where Self: 'a;
+    type Decoder = JsonDecoder<'c>;
+
+    fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    fn cursor_index(&self) -> usize {
+        self.cursor_index
+    }
 
     fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
-        todo!()
+        &self.coding_path
     }
 
     fn decode_u8(&mut self) -> Result<u8, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_u16(&mut self) -> Result<u16, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_u32(&mut self) -> Result<u32, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_u64(&mut self) -> Result<u64, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_u128(&mut self) -> Result<u128, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_usize(&mut self) -> Result<usize, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_i8(&mut self) -> Result<i8, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_i16(&mut self) -> Result<i16, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_i32(&mut self) -> Result<i32, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_i64(&mut self) -> Result<i64, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_i128(&mut self) -> Result<i128, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_isize(&mut self) -> Result<isize, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_string(&mut self) -> Result<String, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::String(x) => x.to_string(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_f32(&mut self) -> Result<f32, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_f64(&mut self) -> Result<f64, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Number(x) => x.parse().unwrap(),
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn decode_bool(&mut self) -> Result<bool, Self::Error> {
-        todo!()
+        let result = match &self.value[self.cursor_index] {
+            Value::Bool(x) => *x,
+            _ => return Err(Error::InvalidType),
+        };
+        self.cursor_index += 1;
+        Ok(result)
     }
 
-    fn decode_option<T: Decode>(&mut self) -> Result<T, Self::Error> {
-        todo!()
+    fn decode_option<T: Decode>(&mut self) -> Result<Option<T>, Self::Error> {
+        match self.decode() {
+            Ok(v) => Ok(Some(v)),
+            Err(Error::KeyNotFound) => Ok(None),
+            Err(e) => Err(e)
+        }
     }
 
     fn decode<T: Decode>(&mut self) -> Result<T, Self::Error> {
-        todo!()
+        println!("seq[{}] -> {:?} <{}>", self.cursor_index, &self.value[self.cursor_index], std::any::type_name::<T>());
+        let item = &self.value[self.cursor_index];
+        let result = T::decode(&mut JsonDecoder::new(self.coding_path().clone(), item))?;
+        self.cursor_index += 1;
+        Ok(result)
     }
 
     fn nested_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Decoder<'a> as dec::Decoder>::KeyedContainer, Self::Error> {
+    ) -> Result<<Self::Decoder as dec::Decoder>::KeyedContainer, Self::Error> {
         todo!()
     }
 
     fn nested_seq_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Decoder<'a> as dec::Decoder>::SeqContainer, Self::Error> {
+    ) -> Result<<Self::Decoder as dec::Decoder>::SeqContainer, Self::Error> {
         todo!()
     }
 }
@@ -577,7 +831,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
     ) -> Result<(), Self::Error> {
         let coding_path = self.coding_path.join(key.to_coding_key());
         let key = key.as_str().to_string();
-        let encoder = JsonEncoder::<'a>::new(coding_path);
+        let encoder = JsonEncoder::<'a>::with_path(coding_path);
         let value = value.encode(encoder)?;
         self.value.insert(key, value);
         Ok(())
@@ -768,7 +1022,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         key: &impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
-        let encoder = JsonEncoder::new(p);
+        let encoder = JsonEncoder::with_path(p);
         Ok(encoder.into_container())
     }
 
@@ -777,7 +1031,7 @@ impl<'container> enc::KeyedContainer for KeyedContainer<'container> {
         key: &impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
-        let encoder = JsonEncoder::new(p);
+        let encoder = JsonEncoder::with_path(p);
         Ok(encoder.into_seq_container())
     }
 
@@ -899,7 +1153,7 @@ impl<'container> enc::ValueContainer for ValueContainer<'container> {
     }
 
     fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
-        let value = value.encode(JsonEncoder::new(self.coding_path.clone()))?;
+        let value = value.encode(JsonEncoder::with_path(self.coding_path.clone()))?;
         self.value = Some(value);
         Ok(())
     }
@@ -1029,13 +1283,13 @@ impl<'container> enc::SeqContainer for SeqContainer<'container> {
     }
 
     fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
-        let value = value.encode(JsonEncoder::new(self.coding_path.clone()))?;
+        let value = value.encode(JsonEncoder::with_path(self.coding_path.clone()))?;
         self.values.push(value);
         Ok(())
     }
 }
 
-impl<'r> dec::Decoder<'r> for JsonDecoder<'r> {
+impl<'r> dec::Decoder for JsonDecoder<'r> {
     type Value = Value;
     type Error = Error;
 
@@ -1043,51 +1297,29 @@ impl<'r> dec::Decoder<'r> for JsonDecoder<'r> {
     type ValueContainer = ValueDecodingContainer<'r> where Self: 'r;
     type SeqContainer = SeqDecodingContainer<'r> where Self: 'r;
 
-    fn into_container(self) -> Result<Self::KeyedContainer, Self::Error> {
-        let map = self.value.as_map().unwrap();
-        Ok(KeyedDecodingContainer::new(self, map))
+    fn as_container(&mut self) -> Result<Self::KeyedContainer, Self::Error> {
+        let map = self.value.as_map()?;
+        Ok(KeyedDecodingContainer::new(self.coding_path.clone(), map))
     }
 
-    fn into_value_container(self) -> Result<Self::ValueContainer, Self::Error> {
-        // ValueDecodingContainer::new(self.coding_path, self.value)
-        todo!()
+    fn as_value_container(&mut self) -> Result<Self::ValueContainer, Self::Error> {
+        if !self.value.is_scalar() {
+            return Err(Error::InvalidType);
+        }
+
+        Ok(ValueDecodingContainer::new(
+            self.coding_path.clone(),
+            self.value,
+        ))
     }
 
-    fn into_seq_container(self) -> Result<Self::SeqContainer, Self::Error> {
-        // SeqDecodingContainer::new(self.coding_path, self.value)
-        todo!()
-    }
-}
-
-impl<'r> dec::Decoder<'r> for KeyedDecodingContainer<'r> {
-    type Value = Value;
-    type Error = Error;
-
-    type KeyedContainer = KeyedDecodingContainer<'r>
-    where
-        Self: 'r;
-
-    type ValueContainer = ValueDecodingContainer<'r>
-        where
-            Self: 'r;
-
-    type SeqContainer = SeqDecodingContainer<'r>
-        where
-            Self: 'r;
-
-    fn into_container(self) -> Result<Self::KeyedContainer, Self::Error> {
-        todo!()
-    }
-
-    fn into_value_container(self) -> Result<Self::ValueContainer, Self::Error> {
-        todo!()
-    }
-
-    fn into_seq_container(self) -> Result<Self::SeqContainer, Self::Error> {
-        todo!()
+    fn as_seq_container(&mut self) -> Result<Self::SeqContainer, Self::Error> {
+        Ok(SeqDecodingContainer::new(
+            self.coding_path.clone(),
+            self.value.as_array()?,
+        ))
     }
 }
-
 
 impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
     type Error = Error;
@@ -1247,11 +1479,11 @@ mod test {
         }
 
         impl Decode for ThingA {
-            fn decode<'d, D>(decoder: D) -> DecodeResult<'d, Self, D>
+            fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
             where
-                D: Decoder<'d> + 'd,
+                D: Decoder + 'd,
             {
-                let mut d = decoder.into_container()?;
+                let mut d = decoder.as_container()?;
                 Ok(ThingA {
                     tag: "a".into(),
                     pew: d.decode_u32(&"pew")?,
@@ -1260,11 +1492,11 @@ mod test {
         }
 
         impl Decode for ThingB {
-            fn decode<'d, D>(decoder: D) -> DecodeResult<'d, Self, D>
+            fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
             where
-                D: Decoder<'d> + 'd,
+                D: Decoder + 'd,
             {
-                let mut d = decoder.into_container()?;
+                let mut d = decoder.as_container()?;
                 Ok(ThingB {
                     tag: "b".into(),
                     another: d.decode_string(&"another")?,
@@ -1273,26 +1505,27 @@ mod test {
         }
 
         impl Decode for Tagged {
-            fn decode<'d, D>(decoder: D) -> DecodeResult<'d, Self, D>
+            fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
             where
-                D: Decoder<'d> + 'd,
+                D: Decoder + 'd,
             {
-                let mut d = decoder.into_container()?;
+                let mut d = decoder.as_container()?;
                 let tag = d.decode_string(&"tag")?;
+                drop(d);
                 match &*tag {
-                    "a" => Ok(Tagged::ThingA(ThingA::decode(d)?)),
-                    "b" => Ok(Tagged::ThingB(ThingB::decode(d)?)),
+                    "a" => Ok(Tagged::ThingA(ThingA::decode(decoder)?)),
+                    "b" => Ok(Tagged::ThingB(ThingB::decode(decoder)?)),
                     _ => panic!(),
                 }
             }
         }
 
         impl Decode for Base {
-            fn decode<'d, D>(decoder: D) -> DecodeResult<'d, Self, D>
+            fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
             where
-                D: Decoder<'d> + 'd,
+                D: Decoder + 'd,
             {
-                let mut d = decoder.into_container()?;
+                let mut d = decoder.as_container()?;
                 Ok(Base {
                     tagged: d.decode(&"tagged")?,
                 })
@@ -1312,6 +1545,12 @@ mod test {
         let base = from_value::<Base>(&value).unwrap();
 
         println!("{:?}", &base);
+    }
+
+    #[test]
+    fn encode_prim() {
+        let encoder = JsonEncoder::new();
+        assert_eq!(123u8.encode(encoder).unwrap(), Value::Number("123".into()))
     }
 
     #[test]

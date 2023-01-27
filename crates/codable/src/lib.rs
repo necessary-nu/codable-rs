@@ -1,16 +1,14 @@
-// #![feature(generic_associated_types)]
-
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     marker::PhantomData,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CodingKey {
     Root,
-    String(Cow<'static, str>),
     Int(usize),
+    String(Cow<'static, str>),
 }
 
 impl CodingKey {
@@ -498,44 +496,30 @@ pub mod enc {
 }
 
 pub mod dec {
-    pub trait Decoder<'a> {
+    pub trait Decoder {
         type Value;
-        type Error; //: Debug + 'static;
+        type Error;
 
         type KeyedContainer: KeyedContainer<
-            Decoder<'a> = Self,
+            Decoder = Self,
             Value = Self::Value,
             Error = Self::Error,
-        >
-        where
-            Self: 'a;
+        >;
 
         type ValueContainer: ValueContainer<
-            Decoder<'a> = Self,
+            Decoder = Self,
             Value = Self::Value,
             Error = Self::Error,
-        >
-        where
-            Self: 'a;
+        >;
 
-        type SeqContainer: SeqContainer<
-            Decoder<'a> = Self,
-            Value = Self::Value,
-            Error = Self::Error,
-        >
-        where
-            Self: 'a;
+        type SeqContainer: SeqContainer<Decoder = Self, Value = Self::Value, Error = Self::Error>;
 
-        fn into_container(self) -> Result<Self::KeyedContainer, Self::Error>;
-        fn into_value_container(self) -> Result<Self::ValueContainer, Self::Error>;
-        fn into_seq_container(self) -> Result<Self::SeqContainer, Self::Error>;
+        fn as_container(&mut self) -> Result<Self::KeyedContainer, Self::Error>;
+        fn as_value_container(&mut self) -> Result<Self::ValueContainer, Self::Error>;
+        fn as_seq_container(&mut self) -> Result<Self::SeqContainer, Self::Error>;
     }
 
-    use std::{
-        borrow::Cow,
-        collections::{BTreeMap, HashMap},
-        fmt::Debug, marker::PhantomData,
-    };
+    use std::collections::{BTreeMap, HashMap};
 
     use indexmap::IndexMap;
 
@@ -546,12 +530,14 @@ pub mod dec {
     pub trait KeyedContainer {
         type Error;
         type Value;
-        type Decoder<'a>: Decoder<'a>
+        type Keys<'a>: Iterator<Item = &'a String>
         where
             Self: 'a;
+        type Decoder: Decoder;
 
         fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
         fn contains(&self, coding_key: &impl ToCodingKey) -> bool;
+        fn keys<'a>(&'a self) -> Self::Keys<'a>;
 
         fn decode_u8(&mut self, key: &impl ToCodingKey) -> Result<u8, Self::Error>;
         fn decode_u16(&mut self, key: &impl ToCodingKey) -> Result<u16, Self::Error>;
@@ -569,19 +555,22 @@ pub mod dec {
         fn decode_f32(&mut self, key: &impl ToCodingKey) -> Result<f32, Self::Error>;
         fn decode_f64(&mut self, key: &impl ToCodingKey) -> Result<f64, Self::Error>;
         fn decode_bool(&mut self, key: &impl ToCodingKey) -> Result<bool, Self::Error>;
-        fn decode_option<T: Decode>(&mut self, key: &impl ToCodingKey) -> Result<T, Self::Error>;
+        fn decode_option<T: Decode>(
+            &mut self,
+            key: &impl ToCodingKey,
+        ) -> Result<Option<T>, Self::Error>;
 
         fn decode<T: Decode>(&mut self, key: &impl ToCodingKey) -> Result<T, Self::Error>;
 
         fn nested_container<'a>(
             &'a mut self,
             key: &impl ToCodingKey,
-        ) -> Result<<Self::Decoder<'a> as Decoder>::KeyedContainer, Self::Error>;
+        ) -> Result<<Self::Decoder as Decoder>::KeyedContainer, Self::Error>;
 
         fn nested_seq_container<'a>(
             &'a mut self,
             key: &impl ToCodingKey,
-        ) -> Result<<Self::Decoder<'a> as Decoder>::SeqContainer, Self::Error>;
+        ) -> Result<<Self::Decoder as Decoder>::SeqContainer, Self::Error>;
 
         fn opt_decode_u8(&mut self, key: &impl ToCodingKey) -> Result<Option<u8>, Self::Error> {
             if self.contains(key) {
@@ -703,7 +692,7 @@ pub mod dec {
     pub trait ValueContainer {
         type Error;
         type Value;
-        type Decoder<'a>: Decoder<'a>;
+        type Decoder: Decoder;
 
         fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
 
@@ -723,18 +712,19 @@ pub mod dec {
         fn decode_f32(&mut self) -> Result<f32, Self::Error>;
         fn decode_f64(&mut self) -> Result<f64, Self::Error>;
         fn decode_bool(&mut self) -> Result<bool, Self::Error>;
-        fn decode_option<T: Decode>(&mut self) -> Result<T, Self::Error>;
+        fn decode_null(&mut self) -> Result<(), Self::Error>;
+        fn decode_option<T: Decode>(&mut self) -> Result<Option<T>, Self::Error>;
         fn decode<T: Decode>(&mut self) -> Result<T, Self::Error>;
     }
 
     pub trait SeqContainer {
         type Error;
         type Value;
-        type Decoder<'a>: Decoder<'a>
-        where
-            Self: 'a;
+        type Decoder: Decoder;
 
         fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+        fn len(&self) -> usize;
+        fn cursor_index(&self) -> usize;
 
         fn decode_u8(&mut self) -> Result<u8, Self::Error>;
         fn decode_u16(&mut self) -> Result<u16, Self::Error>;
@@ -752,25 +742,102 @@ pub mod dec {
         fn decode_f32(&mut self) -> Result<f32, Self::Error>;
         fn decode_f64(&mut self) -> Result<f64, Self::Error>;
         fn decode_bool(&mut self) -> Result<bool, Self::Error>;
-        fn decode_option<T: Decode>(&mut self) -> Result<T, Self::Error>;
+        fn decode_option<T: Decode>(&mut self) -> Result<Option<T>, Self::Error>;
         fn decode<T: Decode>(&mut self) -> Result<T, Self::Error>;
 
         fn nested_container<'a>(
             &'a mut self,
-        ) -> Result<<Self::Decoder<'a> as Decoder>::KeyedContainer, Self::Error>;
+        ) -> Result<<Self::Decoder as Decoder>::KeyedContainer, Self::Error>;
 
         fn nested_seq_container<'a>(
             &'a mut self,
-        ) -> Result<<Self::Decoder<'a> as Decoder>::SeqContainer, Self::Error>;
+        ) -> Result<<Self::Decoder as Decoder>::SeqContainer, Self::Error>;
     }
 
-    pub type DecodeResult<'d, T, D> = Result<T, <D as Decoder<'d>>::Error>;
+    pub type DecodeResult<'d, T, D> = Result<T, <D as Decoder>::Error>;
 
     pub trait Decode {
-        fn decode<'d, D>(decoder: D) -> DecodeResult<'d, Self, D>
+        fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
         where
             Self: Sized,
-            D: Decoder<'d> + 'd;
+            D: Decoder + 'd;
+    }
+
+    macro_rules! decode_prim {
+        ($ty:ident, $func:ident) => {
+            impl Decode for $ty {
+                fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+                where
+                    D: Decoder,
+                {
+                    let mut con = decoder.as_value_container()?;
+                    con.$func()
+                }
+            }
+        };
+    }
+
+    decode_prim!(u8, decode_u8);
+    decode_prim!(u16, decode_u16);
+    decode_prim!(u32, decode_u32);
+    decode_prim!(u64, decode_u64);
+    decode_prim!(u128, decode_u128);
+    decode_prim!(usize, decode_usize);
+    decode_prim!(i8, decode_i8);
+    decode_prim!(i16, decode_i16);
+    decode_prim!(i32, decode_i32);
+    decode_prim!(i64, decode_i64);
+    decode_prim!(i128, decode_i128);
+    decode_prim!(isize, decode_isize);
+    decode_prim!(f32, decode_f32);
+    decode_prim!(f64, decode_f64);
+    decode_prim!(bool, decode_bool);
+
+    impl Decode for String {
+        fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+        where
+            D: Decoder,
+        {
+            let mut con = decoder.as_value_container()?;
+            con.decode_string()
+        }
+    }
+
+    macro_rules! decode_map {
+        ($ty:ident) => {
+            impl<V: Decode> Decode for $ty<String, V> {
+                fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+                where
+                    D: Decoder,
+                {
+                    let mut out = Self::new();
+                    let mut con = decoder.as_container()?;
+                    let keys = con.keys().cloned().collect::<Vec<_>>();
+                    for k in keys {
+                        out.insert(k.to_string(), con.decode(&k)?);
+                    }
+                    Ok(out)
+                }
+            }
+        };
+    }
+
+    decode_map!(HashMap);
+    decode_map!(BTreeMap);
+    decode_map!(IndexMap);
+
+    impl<T: Decode> Decode for Vec<T> {
+        fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+        where
+            D: Decoder,
+        {
+            let mut con = decoder.as_seq_container()?;
+            let mut out: Vec<T> = vec![];
+            while con.cursor_index() != con.len() {
+                out.push(con.decode()?);
+            }
+            Ok(out)
+        }
     }
 }
 
