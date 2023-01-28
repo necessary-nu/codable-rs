@@ -158,7 +158,6 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
     }
 
     fn decode_string(&mut self, key: &impl ToCodingKey) -> Result<String, Self::Error> {
-        println!("EHH? {} {:?}", key.as_str(), self.value);
         match self.value.get(&*key.as_str()) {
             Some(Value::String(x)) => Ok(x.to_string()),
             Some(_other) => {
@@ -202,7 +201,6 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
     }
 
     fn decode<T: Decode>(&mut self, key: &impl ToCodingKey) -> Result<T, Self::Error> {
-        println!("{:?} -> {:?}", key.as_str(), &self.value);
         let obj = self
             .value
             .get(&*key.as_str())
@@ -352,7 +350,6 @@ impl<'c> dec::ValueContainer for ValueContainer<'c> {
     }
 
     fn decode<T: Decode>(&mut self) -> Result<T, Self::Error> {
-        println!("value itself -> {:?}", &self.value);
         T::decode(&mut JsonDecoder::new(
             self.coding_path().clone(),
             self.value,
@@ -535,12 +532,6 @@ impl<'c> dec::SeqContainer for SeqContainer<'c> {
     }
 
     fn decode<T: Decode>(&mut self) -> Result<T, Self::Error> {
-        println!(
-            "seq[{}] -> {:?} <{}>",
-            self.cursor_index,
-            &self.value[self.cursor_index],
-            std::any::type_name::<T>()
-        );
         let item = &self.value[self.cursor_index];
         let result = T::decode(&mut JsonDecoder::new(self.coding_path().clone(), item))?;
         self.cursor_index += 1;
