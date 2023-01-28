@@ -123,3 +123,14 @@ impl From<serde_json::Value> for Value {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn basic_int() {
+        let value = to_value(&32_u8).unwrap();
+        println!("{:?}", value);
+    }
+}

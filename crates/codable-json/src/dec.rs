@@ -27,35 +27,35 @@ impl<'a> JsonDecoder<'a> {
     }
 }
 
-pub struct KeyedDecodingContainer<'a> {
+pub struct KeyedContainer<'a> {
     coding_path: CodingPath<'a, CodingKey>,
     value: &'a IndexMap<String, Value>,
 }
 
-pub struct ValueDecodingContainer<'a> {
+pub struct ValueContainer<'a> {
     coding_path: CodingPath<'a, CodingKey>,
     value: &'a Value,
 }
 
-pub struct SeqDecodingContainer<'a> {
+pub struct SeqContainer<'a> {
     coding_path: CodingPath<'a, CodingKey>,
     value: &'a Vec<Value>,
     cursor_index: usize,
 }
 
-impl<'a> KeyedDecodingContainer<'a> {
+impl<'a> KeyedContainer<'a> {
     fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a IndexMap<String, Value>) -> Self {
         Self { coding_path, value }
     }
 }
 
-impl<'a> ValueDecodingContainer<'a> {
+impl<'a> ValueContainer<'a> {
     fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Value) -> Self {
         Self { coding_path, value }
     }
 }
 
-impl<'a> SeqDecodingContainer<'a> {
+impl<'a> SeqContainer<'a> {
     fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Vec<Value>) -> Self {
         Self {
             coding_path,
@@ -87,7 +87,7 @@ where
     }
 }
 
-impl<'c> dec::KeyedContainer for KeyedDecodingContainer<'c> {
+impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
     type Error = Error;
     type Value = Value;
 
@@ -225,7 +225,7 @@ impl<'c> dec::KeyedContainer for KeyedDecodingContainer<'c> {
     }
 }
 
-impl<'c> dec::ValueContainer for ValueDecodingContainer<'c> {
+impl<'c> dec::ValueContainer for ValueContainer<'c> {
     type Error = Error;
     type Value = Value;
 
@@ -364,7 +364,7 @@ impl<'c> dec::ValueContainer for ValueDecodingContainer<'c> {
     }
 }
 
-impl<'c> dec::SeqContainer for SeqDecodingContainer<'c> {
+impl<'c> dec::SeqContainer for SeqContainer<'c> {
     type Error = Error;
     type Value = Value;
 
@@ -564,13 +564,13 @@ impl<'r> Decoder for JsonDecoder<'r> {
     type Value = Value;
     type Error = Error;
 
-    type KeyedContainer = KeyedDecodingContainer<'r> where Self: 'r;
-    type ValueContainer = ValueDecodingContainer<'r> where Self: 'r;
-    type SeqContainer = SeqDecodingContainer<'r> where Self: 'r;
+    type KeyedContainer = KeyedContainer<'r> where Self: 'r;
+    type ValueContainer = ValueContainer<'r> where Self: 'r;
+    type SeqContainer = SeqContainer<'r> where Self: 'r;
 
     fn as_container(&mut self) -> Result<Self::KeyedContainer, Self::Error> {
         let map = self.value.as_map()?;
-        Ok(KeyedDecodingContainer::new(self.coding_path.clone(), map))
+        Ok(KeyedContainer::new(self.coding_path.clone(), map))
     }
 
     fn as_value_container(&mut self) -> Result<Self::ValueContainer, Self::Error> {
@@ -578,14 +578,11 @@ impl<'r> Decoder for JsonDecoder<'r> {
             return Err(Error::InvalidType);
         }
 
-        Ok(ValueDecodingContainer::new(
-            self.coding_path.clone(),
-            self.value,
-        ))
+        Ok(ValueContainer::new(self.coding_path.clone(), self.value))
     }
 
     fn as_seq_container(&mut self) -> Result<Self::SeqContainer, Self::Error> {
-        Ok(SeqDecodingContainer::new(
+        Ok(SeqContainer::new(
             self.coding_path.clone(),
             self.value.as_array()?,
         ))
