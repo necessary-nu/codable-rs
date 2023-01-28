@@ -27,7 +27,7 @@ pub trait KeyedContainer {
         Self: 'a;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
     fn contains(&self, coding_key: &impl ToCodingKey) -> bool;
     fn keys<'a>(&'a self) -> Self::Keys<'a>;
 
@@ -177,7 +177,7 @@ pub trait ValueContainer {
     type Value;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
 
     fn decode_u8(&mut self) -> Result<u8, Self::Error>;
     fn decode_u16(&mut self) -> Result<u16, Self::Error>;
@@ -205,7 +205,7 @@ pub trait SeqContainer {
     type Value;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
     fn len(&self) -> usize;
     fn cursor_index(&self) -> usize;
 

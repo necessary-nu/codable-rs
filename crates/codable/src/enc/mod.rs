@@ -17,7 +17,7 @@ pub trait KeyedContainer {
     where
         Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
 
     fn encode_u8(&mut self, value: u8, key: &impl ToCodingKey) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16, key: &impl ToCodingKey) -> Result<(), Self::Error>;
@@ -48,13 +48,13 @@ pub trait KeyedContainer {
 
     fn nested_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error>;
+        key: &'a impl ToCodingKey,
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::KeyedContainer, Self::Error>;
 
     fn nested_seq_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error>;
+        key: &'a impl ToCodingKey,
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::SeqContainer, Self::Error>;
 
     fn opt_encode_u8(
         &mut self,
@@ -231,7 +231,7 @@ pub trait ValueContainer {
     type Value;
     type Encoder<'a>: Encoder<'a>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
 
     fn encode_u8(&mut self, value: u8) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16) -> Result<(), Self::Error>;
@@ -262,7 +262,7 @@ pub trait SeqContainer {
     where
         Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey>;
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
 
     fn encode_u8(&mut self, value: u8) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16) -> Result<(), Self::Error>;
@@ -285,11 +285,11 @@ pub trait SeqContainer {
 
     fn nested_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error>;
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::KeyedContainer, Self::Error>;
 
     fn nested_seq_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error>;
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::SeqContainer, Self::Error>;
 
     fn finish(self) -> Self::Value;
 }

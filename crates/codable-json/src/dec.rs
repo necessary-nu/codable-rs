@@ -17,46 +17,46 @@ pub enum Error {
 
 #[derive(Debug, Clone)]
 pub struct JsonDecoder<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     value: &'a Value,
 }
 
 impl<'a> JsonDecoder<'a> {
-    pub(crate) fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Value) -> Self {
+    pub(crate) fn new(coding_path: CodingPath<'a, CodingKey<'a>>, value: &'a Value) -> Self {
         Self { coding_path, value }
     }
 }
 
 pub struct KeyedContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     value: &'a IndexMap<String, Value>,
 }
 
 pub struct ValueContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     value: &'a Value,
 }
 
 pub struct SeqContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     value: &'a Vec<Value>,
     cursor_index: usize,
 }
 
 impl<'a> KeyedContainer<'a> {
-    fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a IndexMap<String, Value>) -> Self {
+    fn new(coding_path: CodingPath<'a, CodingKey<'a>>, value: &'a IndexMap<String, Value>) -> Self {
         Self { coding_path, value }
     }
 }
 
 impl<'a> ValueContainer<'a> {
-    fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Value) -> Self {
+    fn new(coding_path: CodingPath<'a, CodingKey<'a>>, value: &'a Value) -> Self {
         Self { coding_path, value }
     }
 }
 
 impl<'a> SeqContainer<'a> {
-    fn new(coding_path: CodingPath<'a, CodingKey>, value: &'a Vec<Value>) -> Self {
+    fn new(coding_path: CodingPath<'a, CodingKey<'a>>, value: &'a Vec<Value>) -> Self {
         Self {
             coding_path,
             value,
@@ -78,7 +78,7 @@ where
             };
             Ok(n)
         }
-        Some(other) => {
+        Some(_other) => {
             todo!()
         }
         None => {
@@ -93,7 +93,7 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
 
     type Decoder = JsonDecoder<'c>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 
@@ -161,7 +161,7 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
         println!("EHH? {} {:?}", key.as_str(), self.value);
         match self.value.get(&*key.as_str()) {
             Some(Value::String(x)) => Ok(x.to_string()),
-            Some(other) => {
+            Some(_other) => {
                 todo!()
             }
             None => {
@@ -181,7 +181,7 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
     fn decode_bool(&mut self, key: &impl ToCodingKey) -> Result<bool, Self::Error> {
         match self.value.get(&*key.as_str()) {
             Some(Value::Bool(x)) => Ok(*x),
-            Some(other) => {
+            Some(_other) => {
                 todo!()
             }
             None => {
@@ -212,14 +212,14 @@ impl<'c> dec::KeyedContainer for KeyedContainer<'c> {
 
     fn nested_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
+        _key: &impl ToCodingKey,
     ) -> Result<<Self::Decoder as dec::Decoder>::KeyedContainer, Self::Error> {
         todo!()
     }
 
     fn nested_seq_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
+        _key: &impl ToCodingKey,
     ) -> Result<<Self::Decoder as dec::Decoder>::SeqContainer, Self::Error> {
         todo!()
     }
@@ -231,7 +231,7 @@ impl<'c> dec::ValueContainer for ValueContainer<'c> {
 
     type Decoder = JsonDecoder<'c>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 
@@ -378,7 +378,7 @@ impl<'c> dec::SeqContainer for SeqContainer<'c> {
         self.cursor_index
     }
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 

@@ -17,7 +17,7 @@ pub enum Error {
 
 #[derive(Debug, Clone)]
 pub struct JsonEncoder<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
 }
 
 impl<'a> JsonEncoder<'a> {
@@ -27,7 +27,7 @@ impl<'a> JsonEncoder<'a> {
         }
     }
 
-    pub(crate) fn with_path(coding_path: CodingPath<'a, CodingKey>) -> Self {
+    pub(crate) fn with_path(coding_path: CodingPath<'a, CodingKey<'a>>) -> Self {
         Self { coding_path }
     }
 }
@@ -54,12 +54,12 @@ impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
 }
 
 pub struct KeyedContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     value: IndexMap<String, Value>,
 }
 
 impl<'a> KeyedContainer<'a> {
-    fn new(coding_path: CodingPath<'a, CodingKey>) -> Self {
+    fn new(coding_path: CodingPath<'a, CodingKey<'a>>) -> Self {
         Self {
             coding_path,
             value: Default::default(),
@@ -72,7 +72,7 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
     type Error = Error;
     type Encoder<'a> = JsonEncoder<'a> where Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 
@@ -225,7 +225,7 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
     ) -> Result<(), Self::Error> {
         let coding_path = self.coding_path.join(key.to_coding_key());
         let key = key.as_str().to_string();
-        let encoder = JsonEncoder::<'a>::with_path(coding_path);
+        let encoder = JsonEncoder::with_path(coding_path);
         let value = value.encode(encoder)?;
         self.value.insert(key, value);
         Ok(())
@@ -413,8 +413,8 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
 
     fn nested_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
+        key: &'a impl ToCodingKey,
+    ) -> Result<<Self::Encoder<'a> as Encoder<'a>>::KeyedContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
         let encoder = JsonEncoder::with_path(p);
         Ok(encoder.into_container())
@@ -422,8 +422,8 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
 
     fn nested_seq_container<'a>(
         &'a mut self,
-        key: &impl ToCodingKey,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
+        key: &'a impl ToCodingKey,
+    ) -> Result<<Self::Encoder<'a> as Encoder<'a>>::SeqContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
         let encoder = JsonEncoder::with_path(p);
         Ok(encoder.into_seq_container())
@@ -436,12 +436,12 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
 
 #[derive(Debug)]
 pub struct ValueContainer<'en> {
-    coding_path: CodingPath<'en, CodingKey>,
+    coding_path: CodingPath<'en, CodingKey<'en>>,
     value: Option<Value>,
 }
 
 impl<'en> ValueContainer<'en> {
-    pub fn new(coding_path: CodingPath<'en, CodingKey>) -> Self {
+    pub fn new(coding_path: CodingPath<'en, CodingKey<'en>>) -> Self {
         Self {
             coding_path,
             value: None,
@@ -454,7 +454,7 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
     type Error = Error;
     type Encoder<'a> = JsonEncoder<'a>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 
@@ -542,7 +542,7 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
         self.value.unwrap_or(Value::Null)
     }
 
-    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
+    fn encode_option<T: Encode>(&mut self, _value: Option<T>) -> Result<(), Self::Error> {
         todo!()
     }
 
@@ -554,12 +554,12 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
 }
 
 pub struct SeqContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey>,
+    coding_path: CodingPath<'a, CodingKey<'a>>,
     values: Vec<Value>,
 }
 
 impl<'en> SeqContainer<'en> {
-    pub fn new(coding_path: CodingPath<'en, CodingKey>) -> Self {
+    pub fn new(coding_path: CodingPath<'en, CodingKey<'en>>) -> Self {
         Self {
             coding_path,
             values: vec![],
@@ -572,7 +572,7 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
     type Value = Value;
     type Encoder<'a> = JsonEncoder<'a> where Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey> {
+    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
         &self.coding_path
     }
 
@@ -658,13 +658,13 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
 
     fn nested_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::KeyedContainer, Self::Error> {
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::KeyedContainer, Self::Error> {
         todo!()
     }
 
     fn nested_seq_container<'a>(
         &'a mut self,
-    ) -> Result<<Self::Encoder<'a> as Encoder>::SeqContainer, Self::Error> {
+    ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::SeqContainer, Self::Error> {
         todo!()
     }
 
@@ -672,7 +672,7 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
         Value::Array(self.values)
     }
 
-    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error> {
+    fn encode_option<T: Encode>(&mut self, _value: Option<T>) -> Result<(), Self::Error> {
         todo!()
     }
 

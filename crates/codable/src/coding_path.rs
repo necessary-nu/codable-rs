@@ -5,14 +5,14 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum CodingKey {
+pub enum CodingKey<'a> {
     Root,
     Int(usize),
-    String(Cow<'static, str>),
+    String(Cow<'a, str>),
 }
 
-impl CodingKey {
-    pub fn as_str(&self) -> Cow<'static, str> {
+impl<'a> CodingKey<'a> {
+    pub fn as_str(&self) -> Cow<'a, str> {
         match self {
             CodingKey::Root => Cow::Borrowed(""),
             CodingKey::String(x) => x.clone(),
@@ -22,25 +22,25 @@ impl CodingKey {
 }
 
 pub trait ToCodingKey {
-    fn to_coding_key(&self) -> CodingKey;
-    fn as_str(&self) -> Cow<'static, str> {
+    fn to_coding_key(&self) -> CodingKey<'_>;
+    fn as_str(&self) -> Cow<'_, str> {
         self.to_coding_key().as_str()
     }
 }
 
 impl ToCodingKey for String {
-    fn to_coding_key(&self) -> CodingKey {
+    fn to_coding_key(&self) -> CodingKey<'_> {
         CodingKey::String(Cow::Owned(self.clone()))
     }
 }
 
 impl<'a> ToCodingKey for &'a str {
-    fn to_coding_key(&self) -> CodingKey {
+    fn to_coding_key(&self) -> CodingKey<'_> {
         CodingKey::String(Cow::Owned(self.to_string()))
     }
 }
 
-impl Display for CodingKey {
+impl Display for CodingKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CodingKey::Root => f.write_str("<root>"),
