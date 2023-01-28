@@ -1,8 +1,10 @@
+use std::str::FromStr;
+
 use indexmap::IndexMap;
 
 use codable::{
     dec::{Decode, DecodeResult, Decoder, SeqContainer as _, ValueContainer as _},
-    enc::Encode,
+    enc::{Encode, ValueContainer as _},
     CodingKey, CodingPath,
 };
 
@@ -29,8 +31,8 @@ impl Default for Value {
 
 #[inline(always)]
 pub fn to_value<T: Encode>(input: &T) -> Result<Value, enc::Error> {
-    let encoder = JsonEncoder::with_path(CodingPath::root(CodingKey::Root));
-    input.encode(encoder)
+    let mut encoder = JsonEncoder::with_path(CodingPath::root(CodingKey::Root));
+    input.encode(&mut encoder)
 }
 
 #[inline(always)]
@@ -72,6 +74,26 @@ impl Value {
         match self {
             Value::Array(x) => Ok(x),
             _ => Err(Error::InvalidType),
+        }
+    }
+}
+
+impl Encode for Value {
+    fn encode<'e, E>(&self, encoder: &mut E) -> codable::enc::EncodeResult<'e, E>
+    where
+        E: codable::enc::Encoder<'e>,
+    {
+        match self {
+            Value::String(x) => x.encode(encoder),
+            Value::Number(x) => x.encode(encoder),
+            Value::Bool(x) => x.encode(encoder),
+            Value::Array(x) => x.encode(encoder),
+            Value::Object(x) => x.encode(encoder),
+            Value::Null => {
+                let mut c = encoder.as_value_container();
+                c.encode_null()?;
+                Ok(c.finish())
+            }
         }
     }
 }
@@ -119,6 +141,24 @@ impl From<serde_json::Value> for Value {
             serde_json::Value::Array(x) => Value::Array(x.into_iter().map(Into::into).collect()),
             serde_json::Value::Object(x) => {
                 Value::Object(x.into_iter().map(|(k, v)| (k, v.into())).collect())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "serde-compat")]
+impl From<Value> for serde_json::Value {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Null => serde_json::Value::Null,
+            Value::Bool(x) => serde_json::Value::Bool(x),
+            Value::Number(x) => {
+                serde_json::Value::Number(serde_json::Number::from_str(&x).unwrap())
+            }
+            Value::String(x) => serde_json::Value::String(x),
+            Value::Array(x) => serde_json::Value::Array(x.into_iter().map(Into::into).collect()),
+            Value::Object(x) => {
+                serde_json::Value::Object(x.into_iter().map(|(k, v)| (k, v.into())).collect())
             }
         }
     }

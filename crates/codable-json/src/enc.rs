@@ -40,16 +40,16 @@ impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
     type ValueContainer = ValueContainer<'r> where Self: 'r;
     type SeqContainer = SeqContainer<'r> where Self: 'r;
 
-    fn into_value_container(self) -> Self::ValueContainer {
-        ValueContainer::new(self.coding_path)
+    fn as_value_container(&mut self) -> Self::ValueContainer {
+        ValueContainer::new(self.coding_path.clone())
     }
 
-    fn into_seq_container(self) -> Self::SeqContainer {
-        SeqContainer::new(self.coding_path)
+    fn as_seq_container(&mut self) -> Self::SeqContainer {
+        SeqContainer::new(self.coding_path.clone())
     }
 
-    fn into_container(self) -> Self::KeyedContainer {
-        KeyedContainer::new(self.coding_path)
+    fn as_container(&mut self) -> Self::KeyedContainer {
+        KeyedContainer::new(self.coding_path.clone())
     }
 }
 
@@ -206,11 +206,11 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
 
     fn encode_option<T: Encode>(
         &mut self,
-        value: Option<T>,
+        value: Option<&T>,
         key: &impl ToCodingKey,
     ) -> Result<(), Self::Error> {
         match value {
-            Some(x) => self.encode(&x, key),
+            Some(x) => self.encode(x, key),
             None => {
                 self.value.insert(key.as_str().to_string(), Value::Null);
                 Ok(())
@@ -225,8 +225,8 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
     ) -> Result<(), Self::Error> {
         let coding_path = self.coding_path.join(key.to_coding_key());
         let key = key.as_str().to_string();
-        let encoder = JsonEncoder::with_path(coding_path);
-        let value = value.encode(encoder)?;
+        let mut encoder = JsonEncoder::with_path(coding_path);
+        let value = value.encode(&mut encoder)?;
         self.value.insert(key, value);
         Ok(())
     }
@@ -416,8 +416,8 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
         key: &'a impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder<'a>>::KeyedContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
-        let encoder = JsonEncoder::with_path(p);
-        Ok(encoder.into_container())
+        let mut encoder = JsonEncoder::with_path(p);
+        Ok(encoder.as_container())
     }
 
     fn nested_seq_container<'a>(
@@ -425,8 +425,8 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
         key: &'a impl ToCodingKey,
     ) -> Result<<Self::Encoder<'a> as Encoder<'a>>::SeqContainer, Self::Error> {
         let p = self.coding_path().join(key.to_coding_key());
-        let encoder = JsonEncoder::with_path(p);
-        Ok(encoder.into_seq_container())
+        let mut encoder = JsonEncoder::with_path(p);
+        Ok(encoder.as_seq_container())
     }
 
     fn finish(self) -> Self::Value {
@@ -538,18 +538,28 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
         Ok(())
     }
 
-    fn finish(self) -> Self::Value {
-        self.value.unwrap_or(Value::Null)
+    fn encode_null(&mut self) -> Result<(), Self::Error> {
+        self.value = Some(Value::Null);
+        Ok(())
     }
 
-    fn encode_option<T: Encode>(&mut self, _value: Option<T>) -> Result<(), Self::Error> {
-        todo!()
+    fn encode_option<T: Encode>(&mut self, value: Option<&T>) -> Result<(), Self::Error> {
+        let value = match value {
+            Some(v) => v.encode(&mut JsonEncoder::with_path(self.coding_path.clone()))?,
+            None => Value::Null,
+        };
+        self.value = Some(value);
+        Ok(())
     }
 
     fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
-        let value = value.encode(JsonEncoder::with_path(self.coding_path.clone()))?;
+        let value = value.encode(&mut JsonEncoder::with_path(self.coding_path.clone()))?;
         self.value = Some(value);
         Ok(())
+    }
+
+    fn finish(self) -> Self::Value {
+        self.value.unwrap_or(Value::Null)
     }
 }
 
@@ -656,6 +666,26 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
         Ok(())
     }
 
+    fn encode_null(&mut self) -> Result<(), Self::Error> {
+        self.values.push(Value::Null);
+        Ok(())
+    }
+
+    fn encode_option<T: Encode>(&mut self, value: Option<&T>) -> Result<(), Self::Error> {
+        let value = match value {
+            Some(v) => v.encode(&mut JsonEncoder::with_path(self.coding_path.clone()))?,
+            None => Value::Null,
+        };
+        self.values.push(value);
+        Ok(())
+    }
+
+    fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let value = value.encode(&mut JsonEncoder::with_path(self.coding_path.clone()))?;
+        self.values.push(value);
+        Ok(())
+    }
+
     fn nested_container<'a>(
         &'a mut self,
     ) -> Result<<Self::Encoder<'a> as Encoder<'_>>::KeyedContainer, Self::Error> {
@@ -670,16 +700,6 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
 
     fn finish(self) -> Self::Value {
         Value::Array(self.values)
-    }
-
-    fn encode_option<T: Encode>(&mut self, _value: Option<T>) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error> {
-        let value = value.encode(JsonEncoder::with_path(self.coding_path.clone()))?;
-        self.values.push(value);
-        Ok(())
     }
 }
 
@@ -705,11 +725,11 @@ mod test {
         }
 
         impl Encode for Hmm {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut con = encoder.into_container();
+                let mut con = encoder.as_container();
                 con.encode(&self.test, &"test")?;
                 con.encode(&self.a_bool, &"a_bool")?;
                 con.encode(&self.a_str, &"a_str")?;
@@ -729,8 +749,11 @@ mod test {
 
     #[test]
     fn encode_prim() {
-        let encoder = JsonEncoder::new();
-        assert_eq!(123u8.encode(encoder).unwrap(), Value::Number("123".into()))
+        let mut encoder = JsonEncoder::new();
+        assert_eq!(
+            123u8.encode(&mut encoder).unwrap(),
+            Value::Number("123".into())
+        )
     }
 
     #[test]
@@ -742,7 +765,7 @@ mod test {
             Number(u32),
         }
         impl Encode for Hmm {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
@@ -800,11 +823,11 @@ mod test {
         }
 
         impl Encode for ThingA {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut c = encoder.into_container();
+                let mut c = encoder.as_container();
                 c.encode_str(&self.tag, &"tag")?;
                 c.encode_u32(self.pew, &"pew")?;
                 Ok(c.finish())
@@ -812,11 +835,11 @@ mod test {
         }
 
         impl Encode for ThingB {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut c = encoder.into_container();
+                let mut c = encoder.as_container();
                 c.encode_str(&self.tag, &"tag")?;
                 c.encode_str(&self.another, &"another")?;
                 Ok(c.finish())
@@ -824,7 +847,7 @@ mod test {
         }
 
         impl Encode for Tagged {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
@@ -836,11 +859,11 @@ mod test {
         }
 
         impl Encode for Base {
-            fn encode<'e, E>(&self, encoder: E) -> enc::EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> enc::EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut c = encoder.into_container();
+                let mut c = encoder.as_container();
                 c.encode(&self.tagged, &"tagged")?;
                 Ok(c.finish())
             }

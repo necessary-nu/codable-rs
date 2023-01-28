@@ -41,7 +41,7 @@ pub trait KeyedContainer {
     fn encode_bool(&mut self, value: bool, key: &impl ToCodingKey) -> Result<(), Self::Error>;
     fn encode_option<T: Encode>(
         &mut self,
-        value: Option<T>,
+        value: Option<&T>,
         key: &impl ToCodingKey,
     ) -> Result<(), Self::Error>;
     fn encode<T: Encode>(&mut self, value: &T, key: &impl ToCodingKey) -> Result<(), Self::Error>;
@@ -249,7 +249,8 @@ pub trait ValueContainer {
     fn encode_f32(&mut self, value: f32) -> Result<(), Self::Error>;
     fn encode_f64(&mut self, value: f64) -> Result<(), Self::Error>;
     fn encode_bool(&mut self, value: bool) -> Result<(), Self::Error>;
-    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error>;
+    fn encode_null(&mut self) -> Result<(), Self::Error>;
+    fn encode_option<T: Encode>(&mut self, value: Option<&T>) -> Result<(), Self::Error>;
     fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error>;
 
     fn finish(self) -> Self::Value;
@@ -280,7 +281,8 @@ pub trait SeqContainer {
     fn encode_f32(&mut self, value: f32) -> Result<(), Self::Error>;
     fn encode_f64(&mut self, value: f64) -> Result<(), Self::Error>;
     fn encode_bool(&mut self, value: bool) -> Result<(), Self::Error>;
-    fn encode_option<T: Encode>(&mut self, value: Option<T>) -> Result<(), Self::Error>;
+    fn encode_null(&mut self) -> Result<(), Self::Error>;
+    fn encode_option<T: Encode>(&mut self, value: Option<&T>) -> Result<(), Self::Error>;
     fn encode<T: Encode>(&mut self, value: &T) -> Result<(), Self::Error>;
 
     fn nested_container<'a>(
@@ -297,7 +299,7 @@ pub trait SeqContainer {
 pub type EncodeResult<'e, E> = Result<<E as Encoder<'e>>::Value, <E as Encoder<'e>>::Error>;
 
 pub trait Encode {
-    fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>;
 }
@@ -305,11 +307,11 @@ pub trait Encode {
 macro_rules! encode_prim {
     ($ty:ident, $func:ident) => {
         impl Encode for $ty {
-            fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut con = encoder.into_value_container();
+                let mut con = encoder.as_value_container();
                 con.$func(*self)?;
                 Ok(con.finish())
             }
@@ -334,23 +336,45 @@ encode_prim!(f64, encode_f64);
 encode_prim!(bool, encode_bool);
 
 impl Encode for &str {
-    fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,
     {
-        let mut con = encoder.into_value_container();
+        let mut con = encoder.as_value_container();
+        con.encode_str(self)?;
+        Ok(con.finish())
+    }
+}
+
+impl Encode for &String {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_value_container();
         con.encode_str(self)?;
         Ok(con.finish())
     }
 }
 
 impl Encode for String {
-    fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,
     {
-        let mut con = encoder.into_value_container();
+        let mut con = encoder.as_value_container();
         con.encode_str(&self)?;
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode + ToOwned> Encode for Cow<'_, T> {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_value_container();
+        con.encode(&*self)?;
         Ok(con.finish())
     }
 }
@@ -358,11 +382,11 @@ impl Encode for String {
 macro_rules! encode_map {
     ($ty:ident) => {
         impl<K: ToCodingKey, V: Encode> Encode for $ty<K, V> {
-            fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+            fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
             where
                 E: Encoder<'e>,
             {
-                let mut con = encoder.into_container();
+                let mut con = encoder.as_container();
                 for (k, v) in self.iter() {
                     con.encode(v, k)?;
                 }
@@ -377,11 +401,11 @@ encode_map!(BTreeMap);
 encode_map!(IndexMap);
 
 impl<T: Encode> Encode for &Vec<T> {
-    fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,
     {
-        let mut con = encoder.into_seq_container();
+        let mut con = encoder.as_seq_container();
         for v in self.iter() {
             con.encode(v)?;
         }
@@ -390,11 +414,11 @@ impl<T: Encode> Encode for &Vec<T> {
 }
 
 impl<T: Encode> Encode for &[T] {
-    fn encode<'e, E>(&self, encoder: E) -> EncodeResult<'e, E>
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,
     {
-        let mut con = encoder.into_seq_container();
+        let mut con = encoder.as_seq_container();
         for v in self.iter() {
             con.encode(v)?;
         }
@@ -426,7 +450,7 @@ pub trait Encoder<'a>: 'a {
     where
         Self: 'a;
 
-    fn into_container(self) -> Self::KeyedContainer;
-    fn into_value_container(self) -> Self::ValueContainer;
-    fn into_seq_container(self) -> Self::SeqContainer;
+    fn as_container(&mut self) -> Self::KeyedContainer;
+    fn as_value_container(&mut self) -> Self::ValueContainer;
+    fn as_seq_container(&mut self) -> Self::SeqContainer;
 }
