@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use codable::{
     enc::{self, Encode, Encoder},
-    CodingKey, CodingPath, ToCodingKey,
+    CodingPath, ToCodingKey,
 };
 
 use crate::Value;
@@ -17,17 +17,17 @@ pub enum Error {
 
 #[derive(Debug, Clone)]
 pub struct JsonEncoder<'a> {
-    coding_path: CodingPath<'a, CodingKey<'a>>,
+    coding_path: CodingPath<'a>,
 }
 
 impl<'a> JsonEncoder<'a> {
     pub fn new() -> Self {
         Self {
-            coding_path: CodingPath::root(CodingKey::Root),
+            coding_path: CodingPath::root(),
         }
     }
 
-    pub(crate) fn with_path(coding_path: CodingPath<'a, CodingKey<'a>>) -> Self {
+    pub(crate) fn with_path(coding_path: CodingPath<'a>) -> Self {
         Self { coding_path }
     }
 }
@@ -54,12 +54,12 @@ impl<'r> enc::Encoder<'r> for JsonEncoder<'r> {
 }
 
 pub struct KeyedContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey<'a>>,
+    coding_path: CodingPath<'a>,
     value: IndexMap<String, Value>,
 }
 
 impl<'a> KeyedContainer<'a> {
-    fn new(coding_path: CodingPath<'a, CodingKey<'a>>) -> Self {
+    fn new(coding_path: CodingPath<'a>) -> Self {
         Self {
             coding_path,
             value: Default::default(),
@@ -72,7 +72,7 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
     type Error = Error;
     type Encoder<'a> = JsonEncoder<'a> where Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
+    fn coding_path(&self) -> &CodingPath<'_> {
         &self.coding_path
     }
 
@@ -436,12 +436,12 @@ impl<'c> enc::KeyedContainer for KeyedContainer<'c> {
 
 #[derive(Debug)]
 pub struct ValueContainer<'en> {
-    coding_path: CodingPath<'en, CodingKey<'en>>,
+    coding_path: CodingPath<'en>,
     value: Option<Value>,
 }
 
 impl<'en> ValueContainer<'en> {
-    pub fn new(coding_path: CodingPath<'en, CodingKey<'en>>) -> Self {
+    pub fn new(coding_path: CodingPath<'en>) -> Self {
         Self {
             coding_path,
             value: None,
@@ -454,7 +454,7 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
     type Error = Error;
     type Encoder<'a> = JsonEncoder<'a>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
+    fn coding_path(&self) -> &CodingPath<'_> {
         &self.coding_path
     }
 
@@ -564,12 +564,12 @@ impl<'c> enc::ValueContainer for ValueContainer<'c> {
 }
 
 pub struct SeqContainer<'a> {
-    coding_path: CodingPath<'a, CodingKey<'a>>,
+    coding_path: CodingPath<'a>,
     values: Vec<Value>,
 }
 
 impl<'en> SeqContainer<'en> {
-    pub fn new(coding_path: CodingPath<'en, CodingKey<'en>>) -> Self {
+    pub fn new(coding_path: CodingPath<'en>) -> Self {
         Self {
             coding_path,
             values: vec![],
@@ -582,7 +582,7 @@ impl<'c> enc::SeqContainer for SeqContainer<'c> {
     type Value = Value;
     type Encoder<'a> = JsonEncoder<'a> where Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>> {
+    fn coding_path(&self) -> &CodingPath<'_> {
         &self.coding_path
     }
 

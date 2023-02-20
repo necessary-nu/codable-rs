@@ -4,11 +4,13 @@ use indexmap::IndexMap;
 
 use crate::{CodingPath, ToCodingKey};
 
-use super::CodingKey;
+pub trait CustomError {
+    fn custom(coding_path: String, message: String) -> Self;
+}
 
 pub trait Decoder {
     type Value;
-    type Error;
+    type Error: CustomError;
 
     type KeyedContainer: KeyedContainer<Decoder = Self, Value = Self::Value, Error = Self::Error>;
     type ValueContainer: ValueContainer<Decoder = Self, Value = Self::Value, Error = Self::Error>;
@@ -20,14 +22,14 @@ pub trait Decoder {
 }
 
 pub trait KeyedContainer {
-    type Error;
+    type Error: CustomError;
     type Value;
     type Keys<'a>: Iterator<Item = &'a String>
     where
         Self: 'a;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
     fn contains(&self, coding_key: &impl ToCodingKey) -> bool;
     fn keys<'a>(&'a self) -> Self::Keys<'a>;
 
@@ -170,14 +172,21 @@ pub trait KeyedContainer {
             Ok(None)
         }
     }
+
+    fn custom_error(&self, message: String) -> <Self as KeyedContainer>::Error {
+        <<Self as KeyedContainer>::Error as CustomError>::custom(
+            self.coding_path().to_string(),
+            message,
+        )
+    }
 }
 
 pub trait ValueContainer {
-    type Error;
+    type Error: CustomError;
     type Value;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
 
     fn decode_u8(&mut self) -> Result<u8, Self::Error>;
     fn decode_u16(&mut self) -> Result<u16, Self::Error>;
@@ -198,14 +207,21 @@ pub trait ValueContainer {
     fn decode_null(&mut self) -> Result<(), Self::Error>;
     fn decode_option<T: Decode>(&mut self) -> Result<Option<T>, Self::Error>;
     fn decode<T: Decode>(&mut self) -> Result<T, Self::Error>;
+
+    fn custom_error(&self, message: String) -> <Self as ValueContainer>::Error {
+        <<Self as ValueContainer>::Error as CustomError>::custom(
+            self.coding_path().to_string(),
+            message,
+        )
+    }
 }
 
 pub trait SeqContainer {
-    type Error;
+    type Error: CustomError;
     type Value;
     type Decoder: Decoder;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
     fn len(&self) -> usize;
     fn cursor_index(&self) -> usize;
 
@@ -235,6 +251,13 @@ pub trait SeqContainer {
     fn nested_seq_container<'a>(
         &'a mut self,
     ) -> Result<<Self::Decoder as Decoder>::SeqContainer, Self::Error>;
+
+    fn custom_error(&self, message: String) -> <Self as SeqContainer>::Error {
+        <<Self as SeqContainer>::Error as CustomError>::custom(
+            self.coding_path().to_string(),
+            message,
+        )
+    }
 }
 
 pub type DecodeResult<'d, T, D> = Result<T, <D as Decoder>::Error>;

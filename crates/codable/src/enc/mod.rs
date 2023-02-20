@@ -8,8 +8,6 @@ use indexmap::IndexMap;
 
 use crate::{CodingPath, ToCodingKey};
 
-use super::CodingKey;
-
 pub trait KeyedContainer {
     type Error;
     type Value;
@@ -17,7 +15,7 @@ pub trait KeyedContainer {
     where
         Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
 
     fn encode_u8(&mut self, value: u8, key: &impl ToCodingKey) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16, key: &impl ToCodingKey) -> Result<(), Self::Error>;
@@ -231,7 +229,7 @@ pub trait ValueContainer {
     type Value;
     type Encoder<'a>: Encoder<'a>;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
 
     fn encode_u8(&mut self, value: u8) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16) -> Result<(), Self::Error>;
@@ -263,7 +261,7 @@ pub trait SeqContainer {
     where
         Self: 'a;
 
-    fn coding_path(&self) -> &CodingPath<'_, CodingKey<'_>>;
+    fn coding_path(&self) -> &CodingPath<'_>;
 
     fn encode_u8(&mut self, value: u8) -> Result<(), Self::Error>;
     fn encode_u16(&mut self, value: u16) -> Result<(), Self::Error>;
@@ -401,6 +399,19 @@ encode_map!(BTreeMap);
 encode_map!(IndexMap);
 
 impl<T: Encode> Encode for &Vec<T> {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode> Encode for Vec<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,

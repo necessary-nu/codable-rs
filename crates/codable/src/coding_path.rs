@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
-    marker::PhantomData,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,43 +50,53 @@ impl Display for CodingKey<'_> {
 }
 
 #[derive(Clone)]
-pub struct CodingPath<'a, T>(*const CodingPath<'a, T>, T, PhantomData<&'a ()>);
+pub struct CodingPath<'a>(*const CodingPath<'a>, CodingKey<'a>);
 
-impl<T: Clone + Debug> Debug for CodingPath<'_, T> {
+impl Debug for CodingPath<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_vec().fmt(f)
     }
 }
 
-impl<'a, T: Clone> CodingPath<'a, T> {
-    pub fn root(value: T) -> CodingPath<'static, T> {
-        CodingPath(std::ptr::null(), value, PhantomData)
+impl Display for CodingPath<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut v = self.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        v.pop(); // pop the root element
+        v.reverse();
+        f.write_str(&v.join("."))
+    }
+}
+
+impl<'a> CodingPath<'a> {
+    pub fn root() -> CodingPath<'a> {
+        CodingPath(std::ptr::null(), CodingKey::Root)
     }
 
-    pub fn join(&self, item: T) -> CodingPath<'a, T> {
-        CodingPath(self, item, PhantomData)
+    pub fn replace(&'a mut self, item: CodingKey<'a>) {
+        self.1 = item;
     }
 
-    pub fn iter(&self) -> CodingPathIter<'_, T> {
+    pub fn join(&self, item: CodingKey<'a>) -> CodingPath<'a> {
+        CodingPath(self, item)
+    }
+
+    pub fn iter(&'a self) -> CodingPathIter<'a> {
         CodingPathIter { current: self }
     }
 
-    pub fn to_vec(&self) -> Vec<T> {
+    pub fn to_vec(&'a self) -> Vec<CodingKey<'_>> {
         let mut vec = self.iter().cloned().collect::<Vec<_>>();
         vec.reverse();
         vec
     }
 }
 
-pub struct CodingPathIter<'a, T> {
-    current: *const CodingPath<'a, T>,
+pub struct CodingPathIter<'a> {
+    current: *const CodingPath<'a>,
 }
 
-impl<'a, T> Iterator for CodingPathIter<'a, T>
-where
-    T: 'a,
-{
-    type Item = &'a T;
+impl<'a> Iterator for CodingPathIter<'a> {
+    type Item = &'a CodingKey<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current.is_null() {

@@ -31,13 +31,13 @@ impl Default for Value {
 
 #[inline(always)]
 pub fn to_value<T: Encode>(input: &T) -> Result<Value, enc::Error> {
-    let mut encoder = JsonEncoder::with_path(CodingPath::root(CodingKey::Root));
+    let mut encoder = JsonEncoder::with_path(CodingPath::root());
     input.encode(&mut encoder)
 }
 
 #[inline(always)]
 pub fn from_value<T: Decode>(input: &Value) -> Result<T, dec::Error> {
-    let mut decoder = JsonDecoder::new(CodingPath::root(CodingKey::Root), input);
+    let mut decoder = JsonDecoder::new(CodingPath::root(), input);
     T::decode(&mut decoder)
 }
 
@@ -49,31 +49,20 @@ impl Value {
         }
     }
 
-    pub fn as_map(&self) -> Result<&IndexMap<String, Value>, Error> {
+    pub fn as_map(&self, coding_path: &CodingPath<'_>) -> Result<&IndexMap<String, Value>, Error> {
         match self {
             Value::Object(ref x) => Ok(x),
-            _ => Err(Error::InvalidType),
+            x => Err(Error::InvalidType(format!(
+                "{coding_path} (as_map) {:?}",
+                x
+            ))),
         }
     }
 
-    pub fn as_array(&self) -> Result<&Vec<Value>, Error> {
+    pub fn as_array(&self, coding_path: &CodingPath<'_>) -> Result<&Vec<Value>, Error> {
         match self {
             Value::Array(ref x) => Ok(x),
-            _ => Err(Error::InvalidType),
-        }
-    }
-
-    pub fn into_map(self) -> Result<IndexMap<String, Value>, Error> {
-        match self {
-            Value::Object(x) => Ok(x),
-            _ => Err(Error::InvalidType),
-        }
-    }
-
-    pub fn into_array(self) -> Result<Vec<Value>, Error> {
-        match self {
-            Value::Array(x) => Ok(x),
-            _ => Err(Error::InvalidType),
+            _ => Err(Error::InvalidType(coding_path.to_string())),
         }
     }
 }
@@ -104,29 +93,33 @@ impl Decode for Value {
         Self: Sized,
         D: Decoder + 'd,
     {
-        if let Ok(mut d) = decoder.as_seq_container() {
-            return Ok(Value::Array(d.decode()?));
+        if let Ok(mut d) = decoder.as_value_container() {
+            if let Ok(x) = d.decode_f64() {
+                return Ok(Value::Number(x.to_string()));
+            }
+
+            if let Ok(x) = d.decode_string() {
+                return Ok(Value::String(x));
+            }
+
+            if let Ok(x) = d.decode_bool() {
+                return Ok(Value::Bool(x));
+            }
+
+            if let Ok(_) = d.decode_null() {
+                return Ok(Value::Null);
+            }
         }
 
         if let Ok(_) = decoder.as_container() {
             return Ok(Value::Object(Decode::decode(decoder)?));
         }
 
-        let mut d = decoder.as_value_container()?;
-
-        if let Ok(x) = d.decode_f64() {
-            return Ok(Value::Number(x.to_string()));
+        if let Ok(_) = decoder.as_seq_container() {
+            return Ok(Value::Array(Decode::decode(decoder)?));
         }
 
-        if let Ok(x) = d.decode_string() {
-            return Ok(Value::String(x));
-        }
-
-        if let Ok(x) = d.decode_bool() {
-            return Ok(Value::Bool(x));
-        }
-
-        Ok(Value::Null)
+        panic!("Invalid type");
     }
 }
 
@@ -166,11 +159,37 @@ impl From<Value> for serde_json::Value {
 
 #[cfg(test)]
 mod test {
+    use codable::enc::KeyedContainer;
+
     use super::*;
 
     #[test]
     fn basic_int() {
         let value = to_value(&32_u8).unwrap();
+        println!("{:?}", value);
+    }
+
+    #[derive(Debug)]
+    struct Ex {
+        not: String,
+    }
+
+    impl Encode for Ex {
+        fn encode<'e, E>(&self, encoder: &mut E) -> codable::enc::EncodeResult<'e, E>
+        where
+            E: codable::enc::Encoder<'e>,
+        {
+            let mut c = encoder.as_container();
+            c.encode(&self.not, &"$not")?;
+            Ok(c.finish())
+        }
+    }
+
+    #[test]
+    fn basic_vec() {
+        let value = to_value(&vec![Ex { not: "lol".into() }, Ex { not: "lol2".into() }]).unwrap();
+        println!("{:?}", value);
+        let value: crate::Value = from_value(&value).unwrap();
         println!("{:?}", value);
     }
 }
