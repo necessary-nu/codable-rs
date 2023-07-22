@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt::Debug,
 };
 
@@ -391,6 +391,19 @@ macro_rules! encode_map {
                 Ok(con.finish())
             }
         }
+
+        impl<K: ToCodingKey, V: Encode> Encode for &$ty<K, V> {
+            fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+            where
+                E: Encoder<'e>,
+            {
+                let mut con = encoder.as_container();
+                for (k, v) in self.iter() {
+                    con.encode(v, k)?;
+                }
+                Ok(con.finish())
+            }
+        }
     };
 }
 
@@ -425,6 +438,58 @@ impl<T: Encode> Encode for Vec<T> {
 }
 
 impl<T: Encode> Encode for &[T] {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode> Encode for HashSet<T> {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode> Encode for &HashSet<T> {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode> Encode for BTreeSet<T> {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
+impl<T: Encode> Encode for &BTreeSet<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
         E: Encoder<'e>,

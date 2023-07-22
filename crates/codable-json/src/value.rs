@@ -3,9 +3,9 @@ use std::str::FromStr;
 use indexmap::IndexMap;
 
 use codable::{
-    dec::{Decode, DecodeResult, Decoder, SeqContainer as _, ValueContainer as _},
+    dec::{Decode, DecodeResult, Decoder, ValueContainer as _},
     enc::{Encode, ValueContainer as _},
-    CodingKey, CodingPath,
+    CodingPath,
 };
 
 use crate::{
