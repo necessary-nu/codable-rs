@@ -414,6 +414,23 @@ encode_map!(BTreeMap);
 #[cfg(feature = "indexmap")]
 encode_map!(IndexMap);
 
+#[cfg(feature = "smallvec")]
+impl<A: smallvec::Array> Encode for smallvec::SmallVec<A>
+where
+    A::Item: Encode,
+{
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_seq_container();
+        for v in self.iter() {
+            con.encode(v)?;
+        }
+        Ok(con.finish())
+    }
+}
+
 impl<T: Encode> Encode for &Vec<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
