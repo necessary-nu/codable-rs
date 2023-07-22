@@ -1,0 +1,13 @@
+[package]
+name = "codable-macro"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+codable-macro-impl = { version = "=0.1.0", path = "../codable-macro-impl" }
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"

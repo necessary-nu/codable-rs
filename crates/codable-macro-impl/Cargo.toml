@@ -1,0 +1,11 @@
+[package]
+name = "codable-macro-impl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+heck = "0.4.1"
+darling = "0.20.3"

@@ -1,0 +1,7 @@
+[package]
+name = "codable-derive"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+codable-macro = { version = "=0.1.0", path = "../codable-macro" }
