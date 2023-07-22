@@ -74,9 +74,9 @@ pub struct CodableAttrs {
 }
 
 #[derive(Debug, FromAttributes)]
-#[darling(attributes(rename))]
+#[darling(attributes(codable))]
 pub struct CodableAttrAttrs {
-    rename: Option<String>,
+    rename: Option<syn::LitStr>,
 }
 
 fn rename_input(style: RenameStyle, input: &str) -> String {
@@ -93,7 +93,7 @@ fn derive_encode_enum(data: DataEnum, attrs: CodableAttrs, input: DeriveInput) -
         let local_attrs = CodableAttrAttrs::from_attributes(&x.attrs)?;
         
         let key = if let Some(rename) = local_attrs.rename {
-            rename
+            rename.value()
         } else if let Some(rename) = attrs.rename {
             rename_input(rename, &x.ident.to_string())
         } else {
