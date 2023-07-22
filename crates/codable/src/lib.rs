@@ -13,12 +13,18 @@ pub use coding_path::{CodingKey, CodingPath, CodingPathIter, ToCodingKey};
 mod tests {
     use super::*;
 
+    #[derive(Debug, Encode)]
+    #[codable(rename = "kebab-case")]
+    enum Enum {
+        A,
+        B,
+        Potato,
+        C,
+        AnotherOne,
+    }
+
     #[derive(Debug, Encode, Decode)]
-    #[codable(
-        rename = "kebab-case",
-        tag("type", "blep"),
-        tag("type2", "blep2"),
-    )]
+    #[codable(rename = "kebab-case", tag("type", "blep"), tag("type2", "blep2"))]
     struct Something {
         a: u8,
         b: u16,
@@ -37,8 +43,9 @@ mod tests {
         o: String,
         p: Vec<u8>,
         q_r_s: Option<u8>,
+        le_enum: Enum,
     }
-    
+
     #[test]
     fn blep() {
         let x = Something {
@@ -59,6 +66,7 @@ mod tests {
             o: Default::default(),
             p: Default::default(),
             q_r_s: Default::default(),
+            le_enum: Enum::AnotherOne,
         };
         let x = codable_json::to_value(&x).unwrap();
         println!("{:?}", x);

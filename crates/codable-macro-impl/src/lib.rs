@@ -1,10 +1,10 @@
 //! This crate implements the macro for `blep` and should not be used directly.
 
-use darling::{FromDeriveInput, FromMeta, export::NestedMeta};
+use darling::{FromDeriveInput, FromMeta, export::NestedMeta, FromAttributes};
 use heck::{ToLowerCamelCase, ToPascalCase, ToKebabCase, ToSnakeCase};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, ItemStruct, Lit};
+use syn::{DeriveInput, Lit, DataStruct, DataEnum};
 
 #[derive(Debug, Clone, Copy)]
 enum RenameStyle {
@@ -68,9 +68,14 @@ impl FromMeta for TagPair {
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(codable))]
 pub struct CodableAttrs {
-    attrs: Vec<syn::Attribute>,
     #[darling(multiple)]
     tag: Vec<TagPair>,
+    rename: Option<RenameStyle>,
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(rename))]
+pub struct CodableAttrAttrs {
     rename: Option<RenameStyle>,
 }
 
@@ -83,21 +88,46 @@ fn rename_input(style: RenameStyle, input: &str) -> String {
     }
 }
 
-#[doc(hidden)]
-pub fn derive_encode(item: TokenStream) -> Result<TokenStream, syn::Error> {
-    let input: DeriveInput = syn::parse2(item)?;
-    let attrs = CodableAttrs::from_derive_input(&input)?;
+fn derive_encode_enum(data: DataEnum, attrs: CodableAttrs, input: DeriveInput) -> Result<TokenStream, syn::Error> {
+    let variants = data.variants.iter().map(|x| {
+        let local_attrs = CodableAttrAttrs::from_attributes(&x.attrs)?;
+        let rename_style = local_attrs.rename.or_else(|| attrs.rename);
 
-    // let mm = format!("{:?}", &attrs.attrs);
-    // return Err(syn::Error::new_spanned(input, mm));
+        let key = if let Some(rename) = rename_style {
+            rename_input(rename, &x.ident.to_string())
+        } else {
+            x.ident.to_string()
+        };
+        let value = &x.ident;
 
-    let item = match &input.data {
-        syn::Data::Struct(x) => x,
-        syn::Data::Enum(_) => todo!(),
-        syn::Data::Union(_) => todo!(),
+        Ok::<_, darling::Error>(quote! {
+            Self::#value => #key
+        })
+    }).collect::<Result<Vec<_>, _>>()?;
+
+    let enum_name = input.ident.clone();
+    let output = quote! {
+        impl ::codable::enc::Encode for #enum_name {
+            fn encode<'e, E>(&self, encoder: &mut E) -> ::codable::enc::EncodeResult<'e, E>
+            where
+                E: ::codable::enc::Encoder<'e>,
+            {
+                use ::codable::enc::ValueContainer as _;
+
+                let mut c = encoder.as_value_container();
+                c.encode(&match self {
+                    #(#variants),*
+                })?;
+                Ok(c.finish())
+            }
+        }
     };
 
-    let is_tuple_struct = item.fields.iter().any(|x| x.ident.is_none());
+    Ok(output)
+}
+
+fn derive_encode_struct(data: DataStruct, attrs: CodableAttrs, input: DeriveInput) -> Result<TokenStream, syn::Error> {
+    let is_tuple_struct = data.fields.iter().any(|x| x.ident.is_none());
     if is_tuple_struct {
         return Err(syn::Error::new_spanned(
             input,
@@ -105,7 +135,7 @@ pub fn derive_encode(item: TokenStream) -> Result<TokenStream, syn::Error> {
         ));
     }
 
-    let fields = item.fields.iter().map(|field| {
+    let fields = data.fields.iter().map(|field| {
         let value = field.ident.clone().unwrap();
         let key = if let Some(rename) = attrs.rename {
             rename_input(rename, &value.to_string())
@@ -157,11 +187,18 @@ pub fn derive_encode(item: TokenStream) -> Result<TokenStream, syn::Error> {
     };
 
     Ok(output)
+}
 
-    // Implement your proc-macro logic here. :)
-    // Ok(quote! {
-    //     fn blep() -> &'static str { "hello" }
-    // })
+#[doc(hidden)]
+pub fn derive_encode(item: TokenStream) -> Result<TokenStream, syn::Error> {
+    let input: DeriveInput = syn::parse2(item)?;
+    let attrs = CodableAttrs::from_derive_input(&input)?;
+
+    match &input.data {
+        syn::Data::Struct(x) => derive_encode_struct(x.clone(), attrs, input),
+        syn::Data::Enum(x) => derive_encode_enum(x.clone(), attrs, input),
+        syn::Data::Union(_) => todo!(),
+    }
 }
 
 #[doc(hidden)]
