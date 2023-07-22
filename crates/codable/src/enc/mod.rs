@@ -4,6 +4,7 @@ use std::{
     fmt::Debug,
 };
 
+#[cfg(feature = "indexmap")]
 use indexmap::IndexMap;
 
 use crate::{CodingPath, ToCodingKey};
@@ -409,6 +410,8 @@ macro_rules! encode_map {
 
 encode_map!(HashMap);
 encode_map!(BTreeMap);
+
+#[cfg(feature = "indexmap")]
 encode_map!(IndexMap);
 
 impl<T: Encode> Encode for &Vec<T> {

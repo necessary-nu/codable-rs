@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
+#[cfg(feature = "indexmap")]
 use indexmap::IndexMap;
 
 use crate::{CodingPath, ToCodingKey};
@@ -330,6 +331,8 @@ macro_rules! decode_map {
 
 decode_map!(HashMap);
 decode_map!(BTreeMap);
+
+#[cfg(feature = "indexmap")]
 decode_map!(IndexMap);
 
 impl<T: Decode> Decode for Vec<T> {
