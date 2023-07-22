@@ -20,6 +20,7 @@ mod tests {
         B,
         Potato,
         C,
+        #[codable(rename = "test")]
         AnotherOne,
     }
 

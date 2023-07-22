@@ -76,7 +76,7 @@ pub struct CodableAttrs {
 #[derive(Debug, FromAttributes)]
 #[darling(attributes(rename))]
 pub struct CodableAttrAttrs {
-    rename: Option<RenameStyle>,
+    rename: Option<String>,
 }
 
 fn rename_input(style: RenameStyle, input: &str) -> String {
@@ -89,18 +89,20 @@ fn rename_input(style: RenameStyle, input: &str) -> String {
 }
 
 fn derive_encode_enum(data: DataEnum, attrs: CodableAttrs, input: DeriveInput) -> Result<TokenStream, syn::Error> {
-    let variants = data.variants.iter().map(|x| {
+    let variants: Vec<TokenStream> = data.variants.iter().map(|x| {
         let local_attrs = CodableAttrAttrs::from_attributes(&x.attrs)?;
-        let rename_style = local_attrs.rename.or_else(|| attrs.rename);
-
-        let key = if let Some(rename) = rename_style {
+        
+        let key = if let Some(rename) = local_attrs.rename {
+            rename
+        } else if let Some(rename) = attrs.rename {
             rename_input(rename, &x.ident.to_string())
         } else {
             x.ident.to_string()
         };
+
         let value = &x.ident;
 
-        Ok::<_, darling::Error>(quote! {
+        Ok::<TokenStream, darling::Error>(quote! {
             Self::#value => #key
         })
     }).collect::<Result<Vec<_>, _>>()?;
