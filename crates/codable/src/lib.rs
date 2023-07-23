@@ -12,6 +12,7 @@ pub use coding_path::{CodingKey, CodingPath, CodingPathIter, ToCodingKey};
 #[cfg(all(test, feature = "derive"))]
 mod tests {
     use super::*;
+    use chrono::{DateTime, Utc};
     use std::collections::BTreeMap;
 
     #[derive(Debug, Encode)]
@@ -49,6 +50,7 @@ mod tests {
         le_enums: Vec<Enum>,
         u: uuid::Uuid,
         um: BTreeMap<uuid::Uuid, u8>,
+        t: DateTime<Utc>,
     }
 
     #[test]
@@ -77,6 +79,7 @@ mod tests {
             le_enums: vec![Enum::AnotherOne, Enum::A],
             u: uuid::Uuid::default(),
             um,
+            t: Utc::now(),
         };
         let x = codable_json::to_value(&x).unwrap();
         println!("{:?}", x);

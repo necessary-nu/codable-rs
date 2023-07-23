@@ -443,6 +443,21 @@ impl Encode for uuid::Uuid {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl<Tz: chrono::TimeZone> Encode for chrono::DateTime<Tz>
+where
+    Tz::Offset: core::fmt::Display,
+{
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_value_container();
+        con.encode_str(&self.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true))?;
+        Ok(con.finish())
+    }
+}
+
 impl<T: Encode> Encode for &Vec<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
