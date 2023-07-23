@@ -15,6 +15,15 @@ pub enum Error {
     InvalidType,
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::KeyNotFound => write!(f, "key not found"),
+            Error::InvalidType => write!(f, "invalid type"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct JsonEncoder<'a> {
     coding_path: CodingPath<'a>,
