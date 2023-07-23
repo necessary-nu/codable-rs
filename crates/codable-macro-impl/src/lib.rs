@@ -107,20 +107,49 @@ fn derive_encode_enum(data: DataEnum, attrs: CodableAttrs, input: DeriveInput) -
         })
     }).collect::<Result<Vec<_>, _>>()?;
 
-    let enum_name = input.ident.clone();
-    let output = quote! {
-        impl ::codable::enc::Encode for #enum_name {
-            fn encode<'e, E>(&self, encoder: &mut E) -> ::codable::enc::EncodeResult<'e, E>
-            where
-                E: ::codable::enc::Encoder<'e>,
-            {
-                use ::codable::enc::ValueContainer as _;
+    let tags = attrs.tag.iter().map(|x| {
+        let TagPair { name, value } = x;
 
-                let mut c = encoder.as_value_container();
-                c.encode(&match self {
-                    #(#variants),*
-                })?;
-                Ok(c.finish())
+        quote! {
+            c.encode(&#value, &#name)?
+        }
+    }).collect::<Vec<_>>();
+
+    let enum_name = input.ident.clone();
+
+    let output = if tags.is_empty() {
+        quote! {
+            impl ::codable::enc::Encode for #enum_name {
+                fn encode<'e, E>(&self, encoder: &mut E) -> ::codable::enc::EncodeResult<'e, E>
+                where
+                    E: ::codable::enc::Encoder<'e>,
+                {
+                    use ::codable::enc::ValueContainer as _;
+    
+                    let mut c = encoder.as_value_container();
+                    c.encode(&match self {
+                        #(#variants),*
+                    })?;
+                    Ok(c.finish())
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl ::codable::enc::Encode for #enum_name {
+                fn encode<'e, E>(&self, encoder: &mut E) -> ::codable::enc::EncodeResult<'e, E>
+                where
+                    E: ::codable::enc::Encoder<'e>,
+                {
+                    use ::codable::enc::KeyedContainer as _;
+    
+                    let mut c = encoder.as_container();
+                    #(#tags);* ;
+                    c.encode(&match self {
+                        #(#variants),*
+                    }, &"value")?;
+                    Ok(c.finish())
+                }
             }
         }
     };

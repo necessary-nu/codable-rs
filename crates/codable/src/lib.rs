@@ -14,7 +14,7 @@ mod tests {
     use super::*;
 
     #[derive(Debug, Encode)]
-    #[codable(rename = "kebab-case")]
+    #[codable(rename = "kebab-case", tag("type", "LeEnum"), tag("second", 42))]
     enum Enum {
         A,
         B,
@@ -61,8 +61,8 @@ mod tests {
             h: Default::default(),
             i: Default::default(),
             j: Default::default(),
-            k: Default::default(),
-            l: Default::default(),
+            k: 1234.56,
+            l: 1234.56,
             m: Default::default(),
             // n: Default::default(),
             o: Default::default(),
