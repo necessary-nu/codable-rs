@@ -12,6 +12,7 @@ pub use coding_path::{CodingKey, CodingPath, CodingPathIter, ToCodingKey};
 #[cfg(all(test, feature = "derive"))]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[derive(Debug, Encode)]
     #[codable(rename = "kebab-case", tag("type", "LeEnum"), tag("second", 42))]
@@ -47,10 +48,13 @@ mod tests {
         le_enum: Enum,
         le_enums: Vec<Enum>,
         u: uuid::Uuid,
+        um: BTreeMap<uuid::Uuid, u8>,
     }
 
     #[test]
     fn blep() {
+        let mut um = BTreeMap::new();
+        um.insert(uuid::Uuid::default(), 42);
         let x = Something {
             a: Default::default(),
             b: Default::default(),
@@ -72,6 +76,7 @@ mod tests {
             le_enum: Enum::AnotherOne,
             le_enums: vec![Enum::AnotherOne, Enum::A],
             u: uuid::Uuid::default(),
+            um,
         };
         let x = codable_json::to_value(&x).unwrap();
         println!("{:?}", x);

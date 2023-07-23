@@ -39,6 +39,13 @@ impl<'a> ToCodingKey for &'a str {
     }
 }
 
+#[cfg(feature = "uuid")]
+impl ToCodingKey for uuid::Uuid {
+    fn to_coding_key(&self) -> CodingKey<'_> {
+        CodingKey::String(Cow::Owned(self.to_string()))
+    }
+}
+
 impl Display for CodingKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
