@@ -46,6 +46,7 @@ mod tests {
         q_r_s: Option<u8>,
         le_enum: Enum,
         le_enums: Vec<Enum>,
+        u: uuid::Uuid,
     }
 
     #[test]
@@ -70,6 +71,7 @@ mod tests {
             q_r_s: Default::default(),
             le_enum: Enum::AnotherOne,
             le_enums: vec![Enum::AnotherOne, Enum::A],
+            u: uuid::Uuid::default(),
         };
         let x = codable_json::to_value(&x).unwrap();
         println!("{:?}", x);

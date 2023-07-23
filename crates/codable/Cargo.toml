@@ -5,11 +5,12 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-indexmap = { version = "1.9.1", optional = true }
-smallvec = { version = "1.11.0", optional = true }
+indexmap = { version = "1.9.1", optional = true, default-features = false  }
+smallvec = { version = "1.11.0", optional = true, default-features = false  }
 thiserror = "1.0.34"
 tracing = { version = "0.1.37", optional = true }
 codable-derive = { version = "0.1.0", optional = true, path = "../codable-derive" }
+uuid = { version = "1.4.1", optional = true, default-features = false }
 
 [dev-dependencies]
 codable-json = { path = "../codable-json" }
