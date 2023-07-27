@@ -470,6 +470,40 @@ impl Encode for chrono::NaiveDate {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl Encode for chrono::NaiveDateTime {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        use chrono::Timelike;
+        let mut con = encoder.as_value_container();
+        if self.nanosecond() != 0 {
+            con.encode_str(&self.format("%Y-%m-%dT%H:%M:%S%.6f").to_string())?;
+        } else {
+            con.encode_str(&self.format("%Y-%m-%dT%H:%M:%S").to_string())?;
+        }
+        Ok(con.finish())
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl Encode for chrono::NaiveTime {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        use chrono::Timelike;
+        let mut con = encoder.as_value_container();
+        if self.nanosecond() != 0 {
+            con.encode_str(&self.format("%H:%M:%S%.6f").to_string())?;
+        } else {
+            con.encode_str(&self.format("%H:%M:%S").to_string())?;
+        }
+        Ok(con.finish())
+    }
+}
+
 impl<T: Encode> Encode for &Vec<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
