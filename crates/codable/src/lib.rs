@@ -12,7 +12,7 @@ pub use coding_path::{CodingKey, CodingPath, CodingPathIter, ToCodingKey};
 #[cfg(all(test, feature = "derive"))]
 mod tests {
     use super::*;
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, NaiveDate, Utc};
     use std::collections::BTreeMap;
 
     #[derive(Debug, Encode)]
@@ -51,6 +51,7 @@ mod tests {
         u: uuid::Uuid,
         um: BTreeMap<uuid::Uuid, u8>,
         t: DateTime<Utc>,
+        tt: NaiveDate,
     }
 
     #[test]
@@ -80,6 +81,7 @@ mod tests {
             u: uuid::Uuid::default(),
             um,
             t: Utc::now(),
+            tt: NaiveDate::from_ymd(2020, 1, 1),
         };
         let x = codable_json::to_value(&x).unwrap();
         println!("{:?}", x);

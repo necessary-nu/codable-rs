@@ -458,6 +458,18 @@ where
     }
 }
 
+#[cfg(feature = "chrono")]
+impl Encode for chrono::NaiveDate {
+    fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
+    where
+        E: Encoder<'e>,
+    {
+        let mut con = encoder.as_value_container();
+        con.encode_str(&self.format("%Y-%m-%d").to_string())?;
+        Ok(con.finish())
+    }
+}
+
 impl<T: Encode> Encode for &Vec<T> {
     fn encode<'e, E>(&self, encoder: &mut E) -> EncodeResult<'e, E>
     where
