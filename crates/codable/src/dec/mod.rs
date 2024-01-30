@@ -348,3 +348,64 @@ impl<T: Decode> Decode for Vec<T> {
         Ok(out)
     }
 }
+
+#[cfg(feature = "uuid")]
+impl Decode for uuid::Uuid {
+    fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+    where
+        Self: Sized,
+        D: Decoder,
+    {
+        let mut d = decoder.as_value_container()?;
+        let s = d.decode_string()?;
+        Ok(uuid::Uuid::parse_str(&s)
+            .map_err(|e| D::Error::custom(d.coding_path().to_string(), e.to_string()))?)
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl Decode for chrono::NaiveDate {
+    fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+    where
+        D: Decoder,
+    {
+        let mut d = decoder.as_value_container()?;
+        let s = d.decode_string()?;
+        Ok(chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+            .map_err(|e| D::Error::custom(d.coding_path().to_string(), e.to_string()))?)
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl Decode for chrono::NaiveDateTime {
+    fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+    where
+        D: Decoder,
+    {
+        let mut d = decoder.as_value_container()?;
+        let s = d.decode_string()?;
+        if let Ok(v) = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S%.6f") {
+            return Ok(v);
+        }
+        Ok(
+            chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S")
+                .map_err(|e| D::Error::custom(d.coding_path().to_string(), e.to_string()))?,
+        )
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl Decode for chrono::NaiveTime {
+    fn decode<'d, D>(decoder: &mut D) -> DecodeResult<'d, Self, D>
+    where
+        D: Decoder,
+    {
+        let mut d = decoder.as_value_container()?;
+        let s = d.decode_string()?;
+        if let Ok(v) = chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S%.6f") {
+            return Ok(v);
+        }
+        Ok(chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S")
+            .map_err(|e| D::Error::custom(d.coding_path().to_string(), e.to_string()))?)
+    }
+}
