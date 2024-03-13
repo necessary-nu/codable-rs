@@ -6,8 +6,8 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 codable = { path = "../codable", features = ["indexmap"] }
-indexmap = "1.9.1"
-serde_json = { optional = true, version = "1.0.91", features = ["indexmap", "preserve_order"] }
+indexmap = "2"
+serde_json = { optional = true, version = "1.0.114", features = ["indexmap", "preserve_order"] }
 slotmap = "1.0.6"
 thiserror = "1.0.34"
 tracing = { version = "0.1.37", optional = true }
